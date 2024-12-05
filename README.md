@@ -6,6 +6,8 @@ works with cards in addition to active items
 - blank card support
 - clear rune support
 
+works with on-use item effects including but not limited to 'M, 9 Volt, Expansion Pack
+
 7 throw flags to modify behavior
 - no discharge
 - discharge on hide
@@ -31,4 +33,4 @@ hold condition return type:
 - allow hold
 - disable use
 
-its cool and simple
+its cool and simple but also customizable
