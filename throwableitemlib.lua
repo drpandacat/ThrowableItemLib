@@ -7,17 +7,23 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1
+local VERSION = 1.01
 
 --[[
     Throwable item library by Kerkel
-    Version 1.0
+    Version 1.0.0.1
 ]]
 
 return {Init = function ()
+    local configs = {}
+
     if ThrowableItemLib then
         if ThrowableItemLib.Internal.VERSION > VERSION then
             return
+        end
+
+        for k, v in pairs(ThrowableItemLib.Internal.Configs) do
+            configs[k] = v
         end
 
         ThrowableItemLib.Internal:ClearCallbacks()
@@ -29,6 +35,8 @@ return {Init = function ()
     ThrowableItemLib.Internal = {}
     ThrowableItemLib.Internal.VERSION = VERSION
     ThrowableItemLib.Internal.CallbackEntries = {}
+    ---@type ThrowableItemConfig[]
+    ThrowableItemLib.Internal.Configs = configs or {}
 
     ---@param callback ModCallbacks | JumpCallback
     ---@param fn function
@@ -125,9 +133,6 @@ return {Init = function ()
     function ThrowableItemLib.Utility:HasFlags(flags, flag)
         return flags & flag ~= 0
     end
-
-    ---@type ThrowableItemConfig[]
-    ThrowableItemLib.Internal.Configs = {}
 
     ---@param id CollectibleType | Card
     ---@param type ThrowableItemType
