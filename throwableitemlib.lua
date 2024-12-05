@@ -1,11 +1,11 @@
----@class til.ThrowableItemConfig
+---@class ThrowableItemConfig
 ---@field ID CollectibleType | Card
----@field Type til.ThrowableItemType
+---@field Type ThrowableItemType
 ---@field LiftFn? fun(player: EntityPlayer)
 ---@field HideFn? fun(player: EntityPlayer)
 ---@field ThrowFn? fun(player: EntityPlayer, vect: Vector)
----@field Flags? til.ThrowableItemFlag | integer
----@field HoldCondition? fun(player: EntityPlayer, config: til.ThrowableItemConfig): til.HoldConditionReturnType
+---@field Flags? ThrowableItemFlag | integer
+---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
 local VERSION = 1
 
@@ -41,7 +41,7 @@ return {Init = function ()
         })
     end
 
-    ---@enum til.ThrowableItemFlag
+    ---@enum ThrowableItemFlag
     ThrowableItemLib.Flag = {
         NO_DISCHARGE = 1 << 0,
         DISCHARGE_HIDE = 1 << 1,
@@ -55,13 +55,13 @@ return {Init = function ()
         NO_SPARKLE = 1 << 6,
     }
 
-    ---@enum til.ThrowableItemType
+    ---@enum ThrowableItemType
     ThrowableItemLib.Type = {
         ACTIVE = 1,
         CARD = 2,
     }
 
-    ---@enum til.HoldConditionReturnType
+    ---@enum HoldConditionReturnType
     ThrowableItemLib.HoldConditionReturnType = {
         DEFAULT_USE = 1,
         ALLOW_HOLD = 2,
@@ -126,11 +126,11 @@ return {Init = function ()
         return flags & flag ~= 0
     end
 
-    ---@type til.ThrowableItemConfig[]
+    ---@type ThrowableItemConfig[]
     ThrowableItemLib.Internal.Configs = {}
 
     ---@param id CollectibleType | Card
-    ---@param type til.ThrowableItemType
+    ---@param type ThrowableItemType
     ---@return string
     function ThrowableItemLib.Internal:GetHeldConfigKey(id, type)
         return (type == ThrowableItemLib.Type.ACTIVE and "ACTIVE_" or "CARD_") .. id
@@ -138,7 +138,7 @@ return {Init = function ()
 
     ---@param player EntityPlayer
     ---@param id CollectibleType | Card
-    ---@param type til.ThrowableItemType
+    ---@param type ThrowableItemType
     ---@param slot? ActiveSlot
     ---@param continue? boolean
     function ThrowableItemLib.Utility:LiftItem(player, id, type, slot, continue)
@@ -165,7 +165,7 @@ return {Init = function ()
     end
 
     ---@param player EntityPlayer
-    ---@return til.ThrowableItemConfig
+    ---@return ThrowableItemConfig
     function ThrowableItemLib.Utility:GetLiftedItem(player)
         return ThrowableItemLib.Internal:GetData(player).HeldConfig
     end
@@ -257,33 +257,33 @@ return {Init = function ()
     end
 
     ---@param player EntityPlayer
-    ---@return til.ThrowableItemConfig?
+    ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_PRIMARY), ThrowableItemLib.Type.ACTIVE)]
     end
 
     ---@param player EntityPlayer
-    ---@return til.ThrowableItemConfig?
+    ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowableCardConfig(player)
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetCard(0), ThrowableItemLib.Type.CARD)]
     end
 
     ---@param player EntityPlayer
-    ---@return til.ThrowableItemConfig?
+    ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
         if player:GetCard(0) ~= Card.CARD_NULL then return end
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_POCKET), ThrowableItemLib.Type.ACTIVE)]
     end
 
-    ---@param config til.ThrowableItemConfig
+    ---@param config ThrowableItemConfig
     function ThrowableItemLib:RegisterThrowableItem(config)
         config.Flags = config.Flags or 0
         ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(config.ID, config.Type)] = config
     end
 
     ---@param player EntityPlayer
-    ---@param config til.ThrowableItemConfig
-    ---@return til.HoldConditionReturnType?
+    ---@param config ThrowableItemConfig
+    ---@return HoldConditionReturnType?
     function ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
         if config.HoldCondition then
             return config.HoldCondition(player, config)
@@ -358,7 +358,7 @@ return {Init = function ()
         local data = ThrowableItemLib.Internal:GetData(player)
 
         ---@param slot ActiveSlot
-        ---@param config til.ThrowableItemConfig
+        ---@param config ThrowableItemConfig
         local function HandleAction(slot, config)
             local item = player:GetActiveItem(slot)
 
