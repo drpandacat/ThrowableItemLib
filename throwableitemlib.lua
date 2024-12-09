@@ -1,6 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.0.1
+    Version 1.0.2
 ]]
 
 ---@class ThrowableItemConfig
@@ -12,7 +12,7 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1.02
+local VERSION = 1.03
 
 return {Init = function ()
     local configs = {}
@@ -501,7 +501,7 @@ return {Init = function ()
     AddCallback(ModCallbacks.MC_PRE_USE_ITEM, function (_, id, _, player, flags, slot)
         local config = ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE)] if not config then return end
 
-        if ThrowableItemLib.Utility:HasFlags(flags, UseFlag.USE_VOID) or ThrowableItemLib.Utility:HasFlags(flags, UseFlag.USE_MIMIC) then
+        if not player:HasCollectible(id) then
             local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
 
             if condition == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
