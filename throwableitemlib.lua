@@ -1,3 +1,8 @@
+--[[
+    Throwable item library by Kerkel
+    Version 1.0.1
+]]
+
 ---@class ThrowableItemConfig
 ---@field ID CollectibleType | Card
 ---@field Type ThrowableItemType
@@ -7,12 +12,7 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1.01
-
---[[
-    Throwable item library by Kerkel
-    Version 1.0.0.1
-]]
+local VERSION = 1.02
 
 return {Init = function ()
     local configs = {}
@@ -38,7 +38,7 @@ return {Init = function ()
     ---@type ThrowableItemConfig[]
     ThrowableItemLib.Internal.Configs = configs or {}
 
-    ---@param callback ModCallbacks | JumpCallback
+    ---@param callback ModCallbacks
     ---@param fn function
     ---@param param any
     local function AddCallback(callback, fn, param)
@@ -61,6 +61,12 @@ return {Init = function ()
         DISABLE_ITEM_USE = 1 << 5,
         ---Uses PlayerPickup instead of PlayerPickupSparkle
         NO_SPARKLE = 1 << 6,
+        ---No item sprite when hiding
+        EMPTY_HIDE = 1 << 7,
+        ---No item sprite when throwing
+        EMPTY_THROW = 1 << 8,
+        ---Shows the animation so beware
+        ENABLE_CARD_USE = 1 << 9,
     }
 
     ---@enum ThrowableItemType
@@ -181,6 +187,8 @@ return {Init = function ()
         return not not ThrowableItemLib.Utility:GetLiftedItem(player)
     end
 
+    local EMPTY_SPRITE = Sprite()
+
     ---@param player EntityPlayer
     ---@param throw? boolean
     function ThrowableItemLib.Utility:HideItem(player, throw)
@@ -189,10 +197,14 @@ return {Init = function ()
         local data = ThrowableItemLib.Internal:GetData(player)
         local active = data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE
 
-        if active then
-            player:AnimateCollectible(data.HeldConfig.ID, "HideItem", ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_SPARKLE) and "PlayerPickup" or "PlayerPickupSparkle")
+        if throw and ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.EMPTY_THROW) or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.EMPTY_HIDE) then
+            player:AnimatePickup(EMPTY_SPRITE, true, "HideItem")
         else
-            player:AnimateCard(data.HeldConfig.ID, "HideItem")
+            if active then
+                player:AnimateCollectible(data.HeldConfig.ID, "HideItem", ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_SPARKLE) and "PlayerPickup" or "PlayerPickupSparkle")
+            else
+                player:AnimateCard(data.HeldConfig.ID, "HideItem")
+            end
         end
 
         local function ThrowItem(card)
@@ -217,7 +229,8 @@ return {Init = function ()
             if data.Mimic then
                 ThrowItem(true)
             else
-                if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
+                if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE)
+                or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
                     if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
                         player:SetCard(0, 0)
                     end
@@ -264,18 +277,36 @@ return {Init = function ()
     ---@param player EntityPlayer
     ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
+        local data = ThrowableItemLib.Internal:GetData(player)
+
+        if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE and data.ActiveSlot == ActiveSlot.SLOT_PRIMARY then
+            return data.HeldConfig
+        end
+
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_PRIMARY), ThrowableItemLib.Type.ACTIVE)]
     end
 
     ---@param player EntityPlayer
     ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowableCardConfig(player)
+        local data = ThrowableItemLib.Internal:GetData(player)
+
+        if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.CARD then
+            return data.HeldConfig
+        end
+
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetCard(0), ThrowableItemLib.Type.CARD)]
     end
 
     ---@param player EntityPlayer
     ---@return ThrowableItemConfig?
     function ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
+        local data = ThrowableItemLib.Internal:GetData(player)
+
+        if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE and data.ActiveSlot == ActiveSlot.SLOT_POCKET then
+            return data.HeldConfig
+        end
+
         if player:GetCard(0) ~= Card.CARD_NULL then return end
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_POCKET), ThrowableItemLib.Type.ACTIVE)]
     end
@@ -321,8 +352,10 @@ return {Init = function ()
                 local config = Isaac.GetItemConfig():GetCard(card)
                 local item = player:GetActiveItem(ActiveSlot.SLOT_PRIMARY)
 
-                if (config:IsRune() and item == CollectibleType.COLLECTIBLE_CLEAR_RUNE) or
-                (config:IsCard() and item == CollectibleType.COLLECTIBLE_BLANK_CARD) then
+                ---@diagnostic disable-next-line: undefined-field
+                if (config:IsRune() and item == CollectibleType.COLLECTIBLE_CLEAR_RUNE or REPENTOGON and player:VoidHasCollectible(CollectibleType.COLLECTIBLE_CLEAR_RUNE)) or
+                ---@diagnostic disable-next-line: undefined-field
+                (config:IsCard() and item == CollectibleType.COLLECTIBLE_BLANK_CARD or REPENTOGON and player:VoidHasCollectible(CollectibleType.COLLECTIBLE_BLANK_CARD)) then
                     local cardThrowConfig = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
 
                     if cardThrowConfig then
@@ -406,7 +439,10 @@ return {Init = function ()
             and Input.IsActionTriggered(ButtonAction.ACTION_ITEM, player.ControllerIndex) then
                 local itemConfig = Isaac.GetItemConfig():GetCard(card)
 
-                if itemConfig:IsRune() and item == CollectibleType.COLLECTIBLE_CLEAR_RUNE or (itemConfig:IsCard() and item == CollectibleType.COLLECTIBLE_BLANK_CARD) then
+                ---@diagnostic disable-next-line: undefined-field
+                if (itemConfig:IsRune() and (item == CollectibleType.COLLECTIBLE_CLEAR_RUNE or (REPENTOGON and item == CollectibleType.COLLECTIBLE_VOID and player:VoidHasCollectible(CollectibleType.COLLECTIBLE_CLEAR_RUNE))))
+                ---@diagnostic disable-next-line: undefined-field
+                or (itemConfig:IsCard() and (item == CollectibleType.COLLECTIBLE_BLANK_CARD or (REPENTOGON and item == CollectibleType.COLLECTIBLE_VOID and player:VoidHasCollectible(CollectibleType.COLLECTIBLE_BLANK_CARD)))) then
                     if ThrowableItemLib.Utility:IsItemLifted(player) and config.Type == ThrowableItemLib.Type.CARD then
                         data.ScheduleHide = true
                     else
@@ -419,6 +455,11 @@ return {Init = function ()
                     end
                 end
             end
+        end
+
+        if data.ScheduleLift then
+            ThrowableItemLib.Utility:LiftItem(table.unpack(data.ScheduleLift))
+            data.ScheduleLift = nil
         end
     end)
 
@@ -449,6 +490,29 @@ return {Init = function ()
                 end
 
                 ThrowableItemLib.Utility:HideItem(player, true)
+            end
+        end
+    end)
+
+    ---@param id CollectibleType
+    ---@param player EntityPlayer
+    ---@param flags UseFlag | integer
+    ---@param slot ActiveSlot
+    AddCallback(ModCallbacks.MC_PRE_USE_ITEM, function (_, id, _, player, flags, slot)
+        local config = ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE)] if not config then return end
+
+        if ThrowableItemLib.Utility:HasFlags(flags, UseFlag.USE_VOID) or ThrowableItemLib.Utility:HasFlags(flags, UseFlag.USE_MIMIC) then
+            local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
+
+            if condition == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
+
+            if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
+                ThrowableItemLib.Internal:GetData(player).ScheduleLift = {player, id, ThrowableItemLib.Type.ACTIVE, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY}
+                return true
+            end
+
+            if condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
+                return true
             end
         end
     end)
