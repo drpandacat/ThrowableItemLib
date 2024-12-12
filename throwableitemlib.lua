@@ -1,6 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.0.2
+    Version 1.0.2.1
 ]]
 
 ---@class ThrowableItemConfig
@@ -12,7 +12,7 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1.03
+local VERSION = 1.04
 
 return {Init = function ()
     local configs = {}
@@ -97,15 +97,8 @@ return {Init = function ()
     ---@param disableClamp? boolean
     ---@return Vector
     function ThrowableItemLib.Utility:GetAimVect(player, disableClamp)
-        local returnVect
-
-        if player.ControllerIndex == 0 and Options.MouseControl then
-            if Input.IsMouseBtnPressed(0) then
-                returnVect = (Input.GetMousePosition(true) - player.Position):Normalized()
-            end
-        end
-
-        returnVect = returnVect or player:GetShootingInput()
+        local vect = player:GetAimDirection()
+        local returnVect = Vector(vect.X, vect.Y)
 
         if not disableClamp then
             if returnVect:Length() > 0.001 then
