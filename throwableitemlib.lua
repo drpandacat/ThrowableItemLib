@@ -1,6 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.0.3
+    Version 1.0.3.1
 ]]
 
 ---@class ThrowableItemConfig
@@ -12,7 +12,7 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1.05
+local VERSION = 1.06
 
 return {Init = function ()
     local configs = {}
@@ -436,7 +436,7 @@ return {Init = function ()
 
             local item = player:GetActiveItem(ActiveSlot.SLOT_PRIMARY)
 
-            if (not ThrowableItemLib.Utility:NeedsCharge(player, slot)
+            if (not ThrowableItemLib.Utility:NeedsCharge(player, ActiveSlot.SLOT_PRIMARY)
             or ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.USABLE_ANY_CHARGE))
             and Input.IsActionTriggered(ButtonAction.ACTION_ITEM, player.ControllerIndex) then
                 local itemConfig = Isaac.GetItemConfig():GetCard(card)
