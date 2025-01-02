@@ -1,6 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.0.3.1
+    Version 1.0.3.2
 ]]
 
 ---@class ThrowableItemConfig
@@ -12,7 +12,7 @@
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType
 
-local VERSION = 1.06
+local VERSION = 1.07
 
 return {Init = function ()
     local configs = {}
@@ -309,7 +309,8 @@ return {Init = function ()
             return data.HeldConfig
         end
 
-        if player:GetCard(0) ~= Card.CARD_NULL then return end
+        if not (player:GetCard(0) == Card.CARD_NULL and player:GetPill(0) == PillColor.PILL_NULL) then return end
+
         return ThrowableItemLib.Internal.Configs[ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_POCKET), ThrowableItemLib.Type.ACTIVE)]
     end
 
@@ -387,8 +388,12 @@ return {Init = function ()
                 if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, pocket) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
                 return false
             end
-        elseif action == ButtonAction.ACTION_DROP and ThrowableItemLib.Utility:IsItemLifted(player) then
-            return false
+        elseif action == ButtonAction.ACTION_DROP then
+            local config = ThrowableItemLib.Utility:GetLiftedItem(player)
+
+            if config and (not REPENTOGON or config.Type == ThrowableItemLib.Type.CARD) then
+                return false
+            end
         end
     end, InputHook.IS_ACTION_TRIGGERED)
 
@@ -409,17 +414,21 @@ return {Init = function ()
             end
         end
 
-        local active = ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
+        if not data.UsedPocket then
+            local active = ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
 
-        if active and Input.IsActionTriggered(ButtonAction.ACTION_ITEM, player.ControllerIndex) then
-            HandleAction(ActiveSlot.SLOT_PRIMARY, active)
+            if active and Input.IsActionTriggered(ButtonAction.ACTION_ITEM, player.ControllerIndex) then
+                HandleAction(ActiveSlot.SLOT_PRIMARY, active)
+            end
+
+            local pocket = ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
+
+            if pocket and q then
+                HandleAction(ActiveSlot.SLOT_POCKET, pocket)
+            end
         end
 
-        local pocket = ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
-
-        if pocket and q then
-            HandleAction(ActiveSlot.SLOT_POCKET, pocket)
-        end
+        data.UsedPocket = nil
 
         local config = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
 
@@ -518,6 +527,18 @@ return {Init = function ()
             end
         end
     end)
+
+    ---@param player EntityPlayer
+    local function OnUsePocket(_, _, player)
+        local data = ThrowableItemLib.Internal:GetData(player)
+        data.UsedPocket = true
+    end
+    for _, v in ipairs({
+        ModCallbacks.MC_USE_PILL,
+        ModCallbacks.MC_USE_CARD,
+    }) do
+        AddCallback(v, OnUsePocket)
+    end
 
     for _, v in ipairs(ThrowableItemLib.Internal.CallbackEntries) do
         ThrowableItemLib:AddCallback(v.ID, v.FN, v.FILTER)
