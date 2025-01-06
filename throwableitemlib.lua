@@ -1,6 +1,7 @@
 --[[
     Throwable item library by Kerkel
     Version 1.2.1
+    https://github.com/drpandacat/ThrowableItemLib
 ]]
 
 ---@class ThrowableItemConfig
