@@ -1,6 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.2
+    Version 1.2.1
 ]]
 
 ---@class ThrowableItemConfig
@@ -15,9 +15,9 @@
 ---@field HideSprite? Sprite Sprite used when hiding, defaults to item sprite unless the config was registered with the EMPTY_HIDE flag
 ---@field ThrowSprite? Sprite Sprite used when throwing, defaults to item sprite unless the config was registered with the EMPTY_THROW flag
 ---@field Priority? number Order in which the hold condition is checked relative to other configs for the same item. Priority = is 1 by default
----@field Identifier? string Previously existing configs with shared identifiers are removed when a new config for the same item is registered with the same identifier. Use this if you wanna luamod
+---@field Identifier string Previously existing configs with shared identifiers are removed when a new config for the same item is registered with the same identifier. Use this if you wanna luamod
 
-local VERSION = 1.10
+local VERSION = 1.11
 
 return {Init = function ()
     local configs = {}
@@ -66,13 +66,17 @@ return {Init = function ()
 
     ---@enum ThrowableItemFlag
     ThrowableItemLib.Flag = {
+        ---Does not discharge on throw
         NO_DISCHARGE = 1 << 0,
+        ---Discharges on hide
         DISCHARGE_HIDE = 1 << 1,
+        ---Item can be lifted at any charge
         USABLE_ANY_CHARGE = 1 << 2,
+        ---Can not be manually hid
         DISABLE_HIDE = 1 << 3,
         ---Item lift persists when animation is interrupted 
         PERSISTENT = 1 << 4,
-        ---Does not activate the item
+        ---Does not trigger item use upon throw. Useful for preventing on-use effects
         DISABLE_ITEM_USE = 1 << 5,
         ---Uses PlayerPickup instead of PlayerPickupSparkle
         NO_SPARKLE = 1 << 6,
@@ -80,8 +84,10 @@ return {Init = function ()
         EMPTY_HIDE = 1 << 7,
         ---No item sprite or shadow when throwing
         EMPTY_THROW = 1 << 8,
-        ---Shows the animation so beware
+        ---Enables card use upon throw. Shows the animation so beware
         ENABLE_CARD_USE = 1 << 9,
+        ---Attempts to hide use animation if item use is activated manually
+        TRY_HIDE_ANIM = 1 << 10,
     }
 
     ---@enum ThrowableItemType
@@ -92,8 +98,11 @@ return {Init = function ()
 
     ---@enum HoldConditionReturnType
     ThrowableItemLib.HoldConditionReturnType = {
+        ---Item will be used
         DEFAULT_USE = 1,
+        ---Item will be lifted
         ALLOW_HOLD = 2,
+        ---Item will not be lifted or used
         DISABLE_USE = 3,
     }
 
@@ -249,7 +258,10 @@ return {Init = function ()
             else
                 local item = card and player:GetActiveItem(data.ActiveSlot) or data.HeldConfig.ID
 
-                player:UseActiveItem(item)
+                if not data.Mimic or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE) then
+                    ---@diagnostic disable-next-line: param-type-mismatch
+                    player:UseActiveItem(item, ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.TRY_HIDE_ANIM) and UseFlag.USE_NOANIM or 0, data.ActiveSlot)
+                end
 
                 if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
                     player:DischargeActiveItem(data.ActiveSlot)
@@ -268,7 +280,8 @@ return {Init = function ()
                     end
                 else
                     if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                        player:UseCard(data.HeldConfig.ID)
+                        ---@diagnostic disable-next-line: param-type-mismatch
+                        player:UseCard(data.HeldConfig.ID, ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.TRY_HIDE_ANIM) and UseFlag.USE_NOANIM or 0)
                     else
                         data.ForceInputSlot = ActiveSlot.SLOT_POCKET
                     end
