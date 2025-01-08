@@ -1,7 +1,6 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.2.1
-    https://github.com/drpandacat/ThrowableItemLib
+    Version 1.2.2
 ]]
 
 ---@class ThrowableItemConfig
@@ -10,15 +9,13 @@
 ---@field LiftFn? fun(player: EntityPlayer) Called when lifting the item
 ---@field HideFn? fun(player: EntityPlayer) Called when hiding the item, but not when throwing
 ---@field ThrowFn? fun(player: EntityPlayer, vect: Vector) Called when throwing the item
+---@field AnimateFn? fun(player: EntityPlayer, state: ThrowableItemState): boolean? Return true to cancel default animation. Lets you play your own, useful for dynamic sprite changing
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType Called when checking how an item should behave when attempted to be held. If multiple configs exist for the same item and the current check does not allow for the item to be held, checks the next condition down the list based on priority
----@field LiftSprite? Sprite Sprite used when lifting, defaults to item sprite
----@field HideSprite? Sprite Sprite used when hiding, defaults to item sprite unless the config was registered with the EMPTY_HIDE flag
----@field ThrowSprite? Sprite Sprite used when throwing, defaults to item sprite unless the config was registered with the EMPTY_THROW flag
 ---@field Priority? number Order in which the hold condition is checked relative to other configs for the same item. Priority = is 1 by default
 ---@field Identifier string Previously existing configs with shared identifiers are removed when a new config for the same item is registered with the same identifier. Use this if you wanna luamod
 
-local VERSION = 1.11
+local VERSION = 1.12
 
 return {Init = function ()
     local configs = {}
@@ -69,7 +66,7 @@ return {Init = function ()
     ThrowableItemLib.Flag = {
         ---Does not discharge on throw
         NO_DISCHARGE = 1 << 0,
-        ---Discharges on hide
+        ---Dischages on hide
         DISCHARGE_HIDE = 1 << 1,
         ---Item can be lifted at any charge
         USABLE_ANY_CHARGE = 1 << 2,
@@ -81,14 +78,14 @@ return {Init = function ()
         DISABLE_ITEM_USE = 1 << 5,
         ---Uses PlayerPickup instead of PlayerPickupSparkle
         NO_SPARKLE = 1 << 6,
-        ---No item sprite or shadow when hiding
-        EMPTY_HIDE = 1 << 7,
-        ---No item sprite or shadow when throwing
-        EMPTY_THROW = 1 << 8,
-        ---Enables card use upon throw. Shows the animation so beware
+        ---Shows the animation so beware
         ENABLE_CARD_USE = 1 << 9,
         ---Attempts to hide use animation if item use is activated manually
         TRY_HIDE_ANIM = 1 << 10,
+        ---@deprecated
+        EMPTY_HIDE = 1 << 7,
+        ---@deprecated
+        EMPTY_THROW = 1 << 8,
     }
 
     ---@enum ThrowableItemType
@@ -105,6 +102,13 @@ return {Init = function ()
         ALLOW_HOLD = 2,
         ---Item will not be lifted or used
         DISABLE_USE = 3,
+    }
+
+    ---@enum ThrowableItemState
+    ThrowableItemLib.State = {
+        LIFT = 1,
+        HIDE = 2,
+        THROW = 3
     }
 
     function ThrowableItemLib.Internal:ClearCallbacks()
@@ -196,12 +200,12 @@ return {Init = function ()
         data.HeldConfig = config
         data.ActiveSlot = slot
 
-        if data.HeldConfig.LiftSprite then
-            player:AnimatePickup(data.HeldConfig.LiftSprite, nil, "LiftItem")
-        elseif type == ThrowableItemLib.Type.ACTIVE then
-            player:AnimateCollectible(data.HeldConfig.ID, "LiftItem", ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.NO_SPARKLE) and "PlayerPickup" or "PlayerPickupSparkle")
-        else
-            player:AnimateCard(data.HeldConfig.ID, "LiftItem")
+        if not (data.HeldConfig.AnimateFn and data.HeldConfig.AnimateFn(player, ThrowableItemLib.State.LIFT)) then
+            if type == ThrowableItemLib.Type.ACTIVE then
+                player:AnimateCollectible(data.HeldConfig.ID, "LiftItem", ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.NO_SPARKLE) and "PlayerPickup" or "PlayerPickupSparkle")
+            else
+                player:AnimateCard(data.HeldConfig.ID, "LiftItem")
+            end
         end
 
         if REPENTOGON then
@@ -226,8 +230,6 @@ return {Init = function ()
         return not not ThrowableItemLib.Utility:GetLiftedItem(player)
     end
 
-    local emptySprite = Sprite()
-
     ---@param player EntityPlayer
     ---@param throw? boolean
     function ThrowableItemLib.Utility:HideItem(player, throw)
@@ -235,13 +237,10 @@ return {Init = function ()
 
         local data = ThrowableItemLib.Internal:GetData(player)
         local active = data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE
-        local sprite = throw and data.HeldConfig.ThrowSprite or data.HeldConfig.HideSprite
 
         data.ThrewItem = throw
 
-        if sprite then
-            player:AnimatePickup(sprite, throw and ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.EMPTY_THROW) or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.EMPTY_HIDE), "HideItem")
-        else
+        if not (data.HeldConfig.AnimateFn and data.HeldConfig.AnimateFn(player, throw and ThrowableItemLib.State.THROW or ThrowableItemLib.State.HIDE)) then
             if active then
                 player:AnimateCollectible(data.HeldConfig.ID, "HideItem", ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_SPARKLE) and "PlayerPickup" or "PlayerPickupSparkle")
             else
@@ -379,14 +378,6 @@ return {Init = function ()
     ---@param config ThrowableItemConfig
     function ThrowableItemLib:RegisterThrowableItem(config)
         config.Flags = config.Flags or 0
-
-        if ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.EMPTY_THROW) then
-            config.ThrowSprite = emptySprite
-        end
-
-        if ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.EMPTY_HIDE) then
-            config.HideSprite = emptySprite
-        end
 
         local key = ThrowableItemLib.Internal:GetHeldConfigKey(config.ID, config.Type)
 
