@@ -1,21 +1,21 @@
 --[[
     Throwable item library by Kerkel
-    Version 1.2.2
+    Version 1.2.3
 ]]
 
 ---@class ThrowableItemConfig
 ---@field ID CollectibleType | Card Active item or card ID
 ---@field Type ThrowableItemType Active item or card?
----@field LiftFn? fun(player: EntityPlayer) Called when lifting the item
----@field HideFn? fun(player: EntityPlayer) Called when hiding the item, but not when throwing
----@field ThrowFn? fun(player: EntityPlayer, vect: Vector) Called when throwing the item
+---@field LiftFn? fun(player: EntityPlayer, continued: boolean?, slot: ActiveSlot, mimic: CollectibleType?) Called when lifting the item
+---@field HideFn? fun(player: EntityPlayer, slot: ActiveSlot, mimic: CollectibleType?) Called when hiding the item, but not when throwing
+---@field ThrowFn? fun(player: EntityPlayer, vect: Vector, slot: ActiveSlot, mimic: CollectibleType?) Called when throwing the item
 ---@field AnimateFn? fun(player: EntityPlayer, state: ThrowableItemState): boolean? Return true to cancel default animation. Lets you play your own, useful for dynamic sprite changing
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType Called when checking how an item should behave when attempted to be held. If multiple configs exist for the same item and the current check does not allow for the item to be held, checks the next condition down the list based on priority
 ---@field Priority? number Order in which the hold condition is checked relative to other configs for the same item. Priority = is 1 by default
 ---@field Identifier string Previously existing configs with shared identifiers are removed when a new config for the same item is registered with the same identifier. Use this if you wanna luamod
 
-local VERSION = 1.12
+local VERSION = 1.13
 
 return {Init = function ()
     local configs = {}
@@ -213,8 +213,8 @@ return {Init = function ()
             player:SetItemState(type == ThrowableItemLib.Type.ACTIVE and config.ID or 0)
         end
 
-        if data.HeldConfig.LiftFn and not continue then
-            data.HeldConfig.LiftFn(player)
+        if data.HeldConfig.LiftFn then
+            data.HeldConfig.LiftFn(player, continue, data.ActiveSlot, data.Mimic)
         end
     end
 
@@ -297,7 +297,7 @@ return {Init = function ()
             end
         else
             if data.HeldConfig.HideFn then
-                data.HeldConfig.HideFn(player)
+                data.HeldConfig.HideFn(player, data.ActiveSlot, data.Mimic)
             end
 
             if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISCHARGE_HIDE) then
@@ -578,7 +578,7 @@ return {Init = function ()
                 end
             elseif ThrowableItemLib.Utility:IsShooting(player) then
                 if data.HeldConfig.ThrowFn then
-                    data.HeldConfig.ThrowFn(player, ThrowableItemLib.Utility:GetAimVect(player))
+                    data.HeldConfig.ThrowFn(player, ThrowableItemLib.Utility:GetAimVect(player), data.ActiveSlot, data.Mimic)
                 end
 
                 ThrowableItemLib.Utility:HideItem(player, true)
