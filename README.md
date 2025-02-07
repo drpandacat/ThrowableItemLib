@@ -15,13 +15,16 @@
 ```lua
 include("throwableitemlib").Init()
 
+local emptySprite = Sprite()
+local game = Game()
+
 -- Active item example
 ThrowableItemLib:RegisterThrowableItem({
     ID = Isaac.GetItemIdByName("Big Rock"),
     Type = ThrowableItemLib.Type.ACTIVE,
-    Identifier = "Realllly big rock",
+    Identifier = "Big Rock",
     ThrowFn = function (player, vect)
-        local tear = player:FireTear(player.Position, vect:Resized(player.ShotSpeed * 10))
+        local tear = player:FireTear(player.Position, vect:Resized(player.ShotSpeed * 10) + player:GetTearMovementInheritance(vect))
 
         tear:AddTearFlags(TearFlags.TEAR_BOUNCE | TearFlags.TEAR_PIERCING)
         tear:ChangeVariant(TearVariant.ROCK)
@@ -40,12 +43,12 @@ ThrowableItemLib:RegisterThrowableItem({
 ThrowableItemLib:RegisterThrowableItem({
     ID = Isaac.GetCardIdByName("Explosive Card"),
     Type = ThrowableItemLib.Type.CARD,
-    Identifier = "Explosive card",
+    Identifier = "Explosive Card",
     ThrowFn = function (player, vect)
-        Game():Spawn(EntityType.ENTITY_BOMB, BombVariant.BOMB_TROLL, player.Position, vect:Resized(20), player, 0, math.max(Random(), 1))
+        game:Spawn(EntityType.ENTITY_BOMB, BombVariant.BOMB_TROLL, player.Position, vect:Resized(20), player, 0, math.max(Random(), 1))
     end,
     HideFn = function (player)
-        Game():BombExplosionEffects(player.Position, player.Damage * 3, player:GetBombFlags(), nil, player, 2)
+        game:BombExplosionEffects(player.Position, player.Damage * 3, player:GetBombFlags(), nil, player, 2)
         player:UseActiveItem(CollectibleType.COLLECTIBLE_HOW_TO_JUMP)
     end,
     Flags = ThrowableItemLib.Flag.DISCHARGE_HIDE
