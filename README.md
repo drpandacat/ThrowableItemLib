@@ -7,9 +7,9 @@
 - Support for multiple configs per item, avoiding mod incompatibilities when adding throw behavior to vanilla items
 - Allows for dynamically changing the sprite that is lifted, hidden, or thrown
 
-| Cool Void support!  | Cool card support! |
+| Cool Void support!  | Cool pocket item support! |
 | ------------- | ------------- |
-| ![ex1](https://cdn.discordapp.com/attachments/1325938096688074834/1325938097023746088/1-ezgif.com-video-to-gif-converter.gif?ex=67a67a15&is=67a52895&hm=805bdbc422113adac65492b4aa8abc6234ee025d3bc5cf7f7386d1ea33feb34e&)  | ![ex1](https://cdn.discordapp.com/attachments/1325938096688074834/1325938097023746088/1-ezgif.com-video-to-gif-converter.gif?ex=67a67a15&is=67a52895&hm=805bdbc422113adac65492b4aa8abc6234ee025d3bc5cf7f7386d1ea33feb34e&) ||
+| ![Void support](https://file.garden/Z6WcLcheFD8ZldqK/ex1.gif)  | ![Pocket item support](https://file.garden/Z6WcLcheFD8ZldqK/ex2) |
 ## Example code
 (Does not display all optional ThrowableItemConfig fields)
 ```lua
