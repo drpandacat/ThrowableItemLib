@@ -9,7 +9,7 @@
 
 | Cool Void support!  | Cool pocket item support! |
 | ------------- | ------------- |
-| ![Void support](https://file.garden/Z6WcLcheFD8ZldqK/ex1.gif)  | ![Pocket item support](https://file.garden/Z6WcLcheFD8ZldqK/ex2.gif) |
+| ![Void support](https://files.catbox.moe/h4jth2.gif)  | ![Pocket item support](https://files.catbox.moe/m5c5cp.gif) |
 ## Example code
 (Does not display all optional ThrowableItemConfig fields)
 ```lua
