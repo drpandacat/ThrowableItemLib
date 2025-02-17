@@ -22,7 +22,7 @@ local game = Game()
 ThrowableItemLib:RegisterThrowableItem({
     ID = Isaac.GetItemIdByName("Big Rock"),
     Type = ThrowableItemLib.Type.ACTIVE,
-    Identifier = "Big Rock",
+    Identifier = "BigRock",
     ThrowFn = function (player, vect)
         local tear = player:FireTear(player.Position, vect:Resized(player.ShotSpeed * 10) + player:GetTearMovementInheritance(vect))
 
@@ -43,7 +43,7 @@ ThrowableItemLib:RegisterThrowableItem({
 ThrowableItemLib:RegisterThrowableItem({
     ID = Isaac.GetCardIdByName("Explosive Card"),
     Type = ThrowableItemLib.Type.CARD,
-    Identifier = "Explosive Card",
+    Identifier = "ExplosiveCard",
     ThrowFn = function (player, vect)
         game:Spawn(EntityType.ENTITY_BOMB, BombVariant.BOMB_TROLL, player.Position, vect:Resized(20), player, 0, math.max(Random(), 1))
     end,
