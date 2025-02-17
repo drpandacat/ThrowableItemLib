@@ -13,7 +13,7 @@
 ## Example code
 Does not display all features mentioned above!
 ```lua
-include("throwableitemlib").Init()
+include("path.to.throwableitemlib").Init()
 
 local emptySprite = Sprite()
 local game = Game()
