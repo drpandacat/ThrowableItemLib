@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.3.1
+    Version 1.3.2
 ]]
 
 ---@class ThrowableItemConfig
@@ -18,8 +18,9 @@
 ---@class MimicItemConfig
 ---@field ID CollectibleType
 ---@field Condition fun(card: ItemConfigCard, player: EntityPlayer): boolean
+---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an elegible consumable. This active is rendered useless when placed in the pocket slot.
 
-local VERSION = 1.21
+local VERSION = 1.23
 
 return {Init = function ()
     local configs = {}
@@ -217,15 +218,24 @@ return {Init = function ()
         end
     end
 
-    ---@param id Card
+    ---@param id CollectibleType
     ---@param player EntityPlayer
     ---@return boolean?
     function ThrowableItemLib.Internal:MimicCondition(id, player)
-        return ThrowableItemLib.Internal.MimicConfigs[id]
-        and ThrowableItemLib.Internal.MimicConfigs[id].Condition(
-            Isaac.GetItemConfig():GetCard(ThrowableItemLib.Utility:GetFirstCard(player)),
+        local config = ThrowableItemLib.Internal.MimicConfigs[id]
+
+        if not config then return end
+
+        local card, slot = ThrowableItemLib.Utility:GetFirstCard(player)
+
+        if config.PrimaryLift and slot ~= 0 then return end
+
+        local ret = ThrowableItemLib.Internal.MimicConfigs[id].Condition(
+            Isaac.GetItemConfig():GetCard(card),
             player
         )
+
+        return ret
     end
 
     ---@param player EntityPlayer
@@ -258,7 +268,16 @@ return {Init = function ()
                 end
             elseif data.Mimic then
                 data.UsedMimic = data.HeldConfig.ID
-                data.ForceInputSlot = data.ActiveSlot
+
+                if ThrowableItemLib.Internal.MimicConfigs[data.Mimic].PrimaryLift then
+                    data.ForceInputSlot = data.ActiveSlot
+                else
+                    player:DischargeActiveItem(data.ActiveSlot)
+                end
+
+                if REPENTOGON then
+                    player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
+                end
             else
                 local item = card and player:GetActiveItem(data.ActiveSlot) or data.HeldConfig.ID
 
@@ -512,14 +531,24 @@ return {Init = function ()
     end
 
     ---@param player EntityPlayer
+    ---@param activeSlot ActiveSlot
     ---@return ThrowableItemConfig?
-    function ThrowableItemLib.Utility:GetThrowableCardConfig(player)
+    function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot)
         local data = ThrowableItemLib.Internal:GetData(player)
 
-        return data.HeldConfig
-        and data.HeldConfig.Type == ThrowableItemLib.Type.CARD
-        and data.HeldConfig
-        or ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(ThrowableItemLib.Utility:GetFirstCard(player), ThrowableItemLib.Type.CARD))
+        if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.CARD then
+            return data.HeldConfig
+        end
+
+        local card, slot = ThrowableItemLib.Utility:GetFirstCard(player)
+
+        if slot < 0 or (slot > 0 and not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player)) then return end
+
+        local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(card, ThrowableItemLib.Type.CARD))
+
+        if not config then return end
+
+        return config
     end
 
     ---@param player EntityPlayer
@@ -575,7 +604,7 @@ return {Init = function ()
     ---@param action ButtonAction
     AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, _, action)
         local player = entity and entity:ToPlayer()
-        
+
         if not player then return end
 
         if action == ButtonAction.ACTION_ITEM then
@@ -593,12 +622,12 @@ return {Init = function ()
                 return false
             end
 
-            if ThrowableItemLib.Utility:GetThrowableCardConfig(player) and (
+            local cardThrowConfig = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_PRIMARY)
+
+            if cardThrowConfig and (
                 player:GetPlayerType() == PlayerType.PLAYER_JACOB
                 or ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(ActiveSlot.SLOT_PRIMARY), player)
             ) then
-                local cardThrowConfig = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
-
                 if cardThrowConfig and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, cardThrowConfig) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then
                     return
                 end
@@ -618,11 +647,10 @@ return {Init = function ()
             end
 
             if data.ForceInputSlot == ActiveSlot.SLOT_POCKET then
-                data.ForceInputSlot = nil
                 return true
             end
 
-            local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
+            local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
 
             if card then
                 if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, card) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
@@ -680,13 +708,13 @@ return {Init = function ()
         if controlsEnabled then
             if ThrowableItemLib.Utility:GetActiveInput(player, Input.IsActionTriggered) then
                 ThrowableItemLib.Internal:TryLift(player, data, ThrowableItemLib.Utility:GetThrowableActiveConfig(player), ActiveSlot.SLOT_PRIMARY)
-                ThrowableItemLib.Internal:TryMimic(player, data, ThrowableItemLib.Utility:GetThrowableCardConfig(player), ActiveSlot.SLOT_PRIMARY)
+                ThrowableItemLib.Internal:TryMimic(player, data, ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_PRIMARY), ActiveSlot.SLOT_PRIMARY)
             end
 
             if ThrowableItemLib.Utility:GetPocketInput(player, Input.IsActionTriggered) and not data.UsedPocket then
                 ThrowableItemLib.Internal:TryLift(player, data, ThrowableItemLib.Utility:GetThrowablePocketConfig(player), ActiveSlot.SLOT_POCKET)
 
-                local configThrow = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
+                local configThrow = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
 
                 if configThrow then
                     local cardID, cardSlot = ThrowableItemLib.Utility:GetFirstCard(player)
@@ -752,12 +780,16 @@ return {Init = function ()
     ---@param player EntityPlayer
     ---@param slot ActiveSlot
     AddPriorityCallback(ModCallbacks.MC_PRE_USE_ITEM, CallbackPriority.IMPORTANT, function (_, id, _, player, _, slot)
-        if ThrowableItemLib.Internal:GetData(player).ThrownItem or player:HasCollectible(id) then return end
+        local data = ThrowableItemLib.Internal:GetData(player)
+
+        data.ForceInputSlot = nil
+
+        if data.ThrownItem or player:HasCollectible(id) then return end
 
         local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE))
 
         if ThrowableItemLib.Internal:MimicCondition(id, player) then
-            local throwConfigCard = ThrowableItemLib.Utility:GetThrowableCardConfig(player)
+            local throwConfigCard = ThrowableItemLib.Utility:GetThrowableCardConfig(player, slot)
 
             if throwConfigCard and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, throwConfigCard) == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
                 config = throwConfigCard
@@ -771,8 +803,6 @@ return {Init = function ()
         local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
 
         if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
-            local data = ThrowableItemLib.Internal:GetData(player)
-
             data.ScheduleLift = data.ScheduleLift or {}
 
             table.insert(data.ScheduleLift, {player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, id})
@@ -798,6 +828,8 @@ return {Init = function ()
     ---@param player EntityPlayer
     AddPriorityCallback(ModCallbacks.MC_PRE_USE_CARD, CallbackPriority.IMPORTANT, function (_, id, player)
         local data = ThrowableItemLib.Internal:GetData(player)
+
+        data.ForceInputSlot = nil
 
         if data.UsedMimic then
             data.UsedMimic = nil
@@ -842,6 +874,7 @@ return {Init = function ()
                         ---@diagnostic disable-next-line: undefined-global
                         return FiendFolio.PocketObjectMimicCharges[card.ID]
                     end,
+                    PrimaryLift = true,
                 })
             end
         end
