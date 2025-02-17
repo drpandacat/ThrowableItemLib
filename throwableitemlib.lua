@@ -18,7 +18,7 @@
 ---@class MimicItemConfig
 ---@field ID CollectibleType
 ---@field Condition fun(card: ItemConfigCard, player: EntityPlayer): boolean
----@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an elegible consumable. This active is rendered useless when placed in the pocket slot.
+---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 
 local VERSION = 1.23
 
