@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.3.2
+    Version 1.3.3
 ]]
 
 ---@class ThrowableItemConfig
@@ -20,7 +20,7 @@
 ---@field Condition fun(card: ItemConfigCard, player: EntityPlayer): boolean
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 
-local VERSION = 1.23
+local VERSION = 1.24
 
 return {Init = function ()
     local configs = {}
@@ -230,12 +230,10 @@ return {Init = function ()
 
         if config.PrimaryLift and slot ~= 0 then return end
 
-        local ret = ThrowableItemLib.Internal.MimicConfigs[id].Condition(
+        return ThrowableItemLib.Internal.MimicConfigs[id].Condition(
             Isaac.GetItemConfig():GetCard(card),
             player
         )
-
-        return ret
     end
 
     ---@param player EntityPlayer
@@ -276,6 +274,7 @@ return {Init = function ()
                 end
 
                 if REPENTOGON then
+                    ---@diagnostic disable-next-line: undefined-field
                     player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
                 end
             else
@@ -425,8 +424,12 @@ return {Init = function ()
             if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE)
             or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
                 if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                    -- Revisit
-                    player:SetCard(0, 0)
+                    if REPENTOGON then
+                        ---@diagnostic disable-next-line: undefined-field
+                        player:RemovePocketItem(PillCardSlot.PRIMARY)
+                    else
+                        player:SetCard(0, 0)
+                    end
                 end
             else
                 if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
@@ -542,13 +545,11 @@ return {Init = function ()
 
         local card, slot = ThrowableItemLib.Utility:GetFirstCard(player)
 
-        if slot < 0 or (slot > 0 and not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player)) then return end
+        if slot < 0 or (slot > 0 and not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player)) then
+            return
+        end
 
-        local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(card, ThrowableItemLib.Type.CARD))
-
-        if not config then return end
-
-        return config
+        return ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(card, ThrowableItemLib.Type.CARD))
     end
 
     ---@param player EntityPlayer
@@ -601,79 +602,131 @@ return {Init = function ()
     end
 
     ---@param entity Entity?
+    ---@param hook InputHook
     ---@param action ButtonAction
-    AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, _, action)
-        local player = entity and entity:ToPlayer()
+    AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, hook, action)
+        if hook == InputHook.IS_ACTION_TRIGGERED then
+            if action == ButtonAction.ACTION_ITEM then
+                local player = entity and entity:ToPlayer()
 
-        if not player then return end
-
-        if action == ButtonAction.ACTION_ITEM then
-            local data = ThrowableItemLib.Internal:GetData(player)
-
-            if data.ForceInputSlot == ActiveSlot.SLOT_PRIMARY then
-                data.ForceInputSlot = nil
-                return true
-            end
-
-            local active = ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
-
-            if active then
-                if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, active) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
-                return false
-            end
-
-            local cardThrowConfig = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_PRIMARY)
-
-            if cardThrowConfig and (
-                player:GetPlayerType() == PlayerType.PLAYER_JACOB
-                or ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(ActiveSlot.SLOT_PRIMARY), player)
-            ) then
-                if cardThrowConfig and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, cardThrowConfig) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then
+                if not player then
                     return
                 end
 
-                return false
-            end
-        elseif action == ButtonAction.ACTION_PILLCARD then
-            local data = ThrowableItemLib.Internal:GetData(player)
+                local data = ThrowableItemLib.Internal:GetData(player)
+                local type = player:GetPlayerType()
 
-            if player:GetPlayerType() == PlayerType.PLAYER_ESAU then
+                if data.ForceInputSlot == ActiveSlot.SLOT_PRIMARY then
+                    data.ForceInputSlot = nil
+                    return true
+                end
+
+                ---@type any
                 local active = ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
+                active = active and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, active) ~= ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE
 
                 if active then
-                    if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, active) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
+                    return false
+                end
+
+                ---@type any
+                local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_PRIMARY)
+
+                card = card
+                and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, card) ~= ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE
+                and (
+                    ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(ActiveSlot.SLOT_PRIMARY), player)
+                    or (Options.JacobEsauControls ~= 1 and type == PlayerType.PLAYER_JACOB and Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex))
+                )
+
+                if card then
+                    return false
+                end
+            elseif action == ButtonAction.ACTION_PILLCARD then
+                local player = entity and entity:ToPlayer()
+
+                if not player then
+                    return
+                end
+
+                local data = ThrowableItemLib.Internal:GetData(player)
+                local type = player:GetPlayerType()
+
+                if data.ForceInputSlot == ActiveSlot.SLOT_POCKET then
+                    data.ForceInputSlot = nil
+                    return true
+                end
+
+                ---@type any
+                local pocket = ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
+
+                pocket = pocket and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, pocket) ~= ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE
+
+                if pocket then
+                    return false
+                end
+
+                if type == PlayerType.PLAYER_ESAU and Options.JacobEsauControls ~= 1 then
+                    ---@type any
+                    local active = ThrowableItemLib.Utility:GetThrowableActiveConfig(player)
+                    active = active and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, active) ~= ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE
+
+                    if active then
+                        return false
+                    end
+                end
+
+                ---@type any
+                local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
+
+                card = card
+                and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, card) ~= ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE
+                and (type ~= PlayerType.PLAYER_ESAU or Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex))
+
+                if card then
                     return false
                 end
             end
-
-            if data.ForceInputSlot == ActiveSlot.SLOT_POCKET then
-                return true
-            end
-
-            local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
-
-            if card then
-                if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, card) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
-                return false
-            end
-
-            local pocket = ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
-
-            if pocket then
-                if ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, pocket) == ThrowableItemLib.HoldConditionReturnType.DEFAULT_USE then return end
-                return false
-            end
-        elseif action == ButtonAction.ACTION_DROP and ThrowableItemLib.Utility:GetLiftedItem(player) then
-            return false
         end
-    end, InputHook.IS_ACTION_TRIGGERED)
+
+        -- Redo with future RGON+ callbacks
+        if action == ButtonAction.ACTION_DROP then
+            local player = entity and entity:ToPlayer()
+
+            if not player then
+                return
+            end
+
+            local item = ThrowableItemLib.Utility:GetLiftedItem(player)
+
+            if item then
+                if hook == InputHook.IS_ACTION_TRIGGERED then
+                    return false
+                elseif item.Type == ThrowableItemLib.Type.CARD then
+                    if hook == InputHook.GET_ACTION_VALUE then
+                        return 0
+                    end
+
+                    return false
+                end
+            end
+        end
+    end)
 
     ---@param player EntityPlayer
     ---@param fn fun(action: ButtonAction, index: integer): boolean
     function ThrowableItemLib.Utility:GetPocketInput(player, fn)
         local type = player:GetPlayerType()
 
-        if type == PlayerType.PLAYER_JACOB then
+        if Options.JacobEsauControls == 1 then
+            if type == PlayerType.PLAYER_ESAU then
+                return Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
+                and fn(ButtonAction.ACTION_PILLCARD, player.ControllerIndex)
+            elseif type == PlayerType.PLAYER_JACOB then
+                return not Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
+                and fn(ButtonAction.ACTION_PILLCARD, player.ControllerIndex)
+            end
+        elseif type == PlayerType.PLAYER_JACOB then
             return Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
             and fn(ButtonAction.ACTION_ITEM, player.ControllerIndex)
         elseif type == PlayerType.PLAYER_ESAU then
@@ -689,7 +742,15 @@ return {Init = function ()
     function ThrowableItemLib.Utility:GetActiveInput(player, fn)
         local type = player:GetPlayerType()
 
-        if type == PlayerType.PLAYER_JACOB then
+        if Options.JacobEsauControls == 1 then
+            if type == PlayerType.PLAYER_ESAU then
+                return Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
+                and fn(ButtonAction.ACTION_ITEM, player.ControllerIndex)
+            elseif type == PlayerType.PLAYER_JACOB then
+                return not Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
+                and fn(ButtonAction.ACTION_ITEM, player.ControllerIndex)
+            end
+        elseif type == PlayerType.PLAYER_JACOB then
             return not Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex)
             and fn(ButtonAction.ACTION_ITEM, player.ControllerIndex)
         elseif type == PlayerType.PLAYER_ESAU then
@@ -824,36 +885,46 @@ return {Init = function ()
         end
     end)
 
-    ---@param id Card
+    if REPENTOGON then
+        ---@param player EntityPlayer
+        ---@diagnostic disable-next-line: undefined-field
+        AddPriorityCallback(ModCallbacks.MC_PRE_USE_CARD, CallbackPriority.EARLY, function (_, _, player)
+            local data = ThrowableItemLib.Internal:GetData(player)
+
+            data.UsedPocket = true
+            data.ForceInputSlot = nil
+
+            if data.UsedMimic then
+                data.UsedMimic = nil
+                return true
+            end
+        end)
+    else
+        ---@param player EntityPlayer
+        AddCallback(ModCallbacks.MC_USE_CARD, function (_, _, player)
+            local data = ThrowableItemLib.Internal:GetData(player)
+
+            data.UsedPocket = true
+            data.ForceInputSlot = nil
+
+            if data.UsedMimic then
+                data.UsedMimic = nil
+            end
+        end)
+    end
+
     ---@param player EntityPlayer
-    AddPriorityCallback(ModCallbacks.MC_PRE_USE_CARD, CallbackPriority.IMPORTANT, function (_, id, player)
-        local data = ThrowableItemLib.Internal:GetData(player)
-
-        data.ForceInputSlot = nil
-
-        if data.UsedMimic then
-            data.UsedMimic = nil
-            return true
-        end
-    end)
-
-    ---@param player EntityPlayer
-    local function OnUsePocket(_, _, player)
+    AddCallback(ModCallbacks.MC_USE_PILL, function (_, _, player)
         local data = ThrowableItemLib.Internal:GetData(player)
         data.UsedPocket = true
-    end
-    for _, v in ipairs({
-        ModCallbacks.MC_USE_PILL,
-        ModCallbacks.MC_USE_CARD,
-    }) do
-        AddCallback(v, OnUsePocket)
-    end
+    end)
 
     ThrowableItemLib.Utility:RegisterMimicItem({
         ID = CollectibleType.COLLECTIBLE_BLANK_CARD,
         Condition = function (card)
             return card:IsCard()
         end,
+        PrimaryLift = not REPENTOGON,
     })
 
     ThrowableItemLib.Utility:RegisterMimicItem({
@@ -861,6 +932,7 @@ return {Init = function ()
         Condition = function (card)
             return card:IsRune()
         end,
+        PrimaryLift = not REPENTOGON,
     })
 
     local function RegisterPGO()
