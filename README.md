@@ -1,5 +1,5 @@
 ## ThrowableItemLib
-- Easily create active items and cards/runes/objects that are throwable akin to Bob’s Rotten Head or The Candle
+- Easily create active items and consumables that follow the lift, hide, and throw behavior of items like Bob’s Rotten Head or The Candle
 - Proper item interactions with Void, Metronome, and on-use effects such as Book of Virtues and 'M
 - Blank Card, Clear Rune, and Fiend Folio Perfectly Generic Object support for throwable cards, runes, and objects, also allowing for registering custom pocket mimic items
 - 10 flags to modify default lift, throw, and hide behavior
