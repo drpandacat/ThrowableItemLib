@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.3.3
+    Version 1.3.4
 ]]
 
 ---@class ThrowableItemConfig
@@ -20,7 +20,7 @@
 ---@field Condition fun(card: ItemConfigCard, player: EntityPlayer): boolean
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 
-local VERSION = 1.24
+local VERSION = 1.25
 
 return {Init = function ()
     local configs = {}
@@ -393,10 +393,10 @@ return {Init = function ()
             end
         end
 
-        if REPENTOGON then
-            ---@diagnostic disable-next-line: undefined-field
-            player:SetItemState(type == ThrowableItemLib.Type.ACTIVE and config.ID or 0)
-        end
+        -- if REPENTOGON then
+        --     ---@diagnostic disable-next-line: undefined-field
+        --     player:SetItemState(type == ThrowableItemLib.Type.ACTIVE and config.ID or 0)
+        -- end
 
         if config.LiftFn then
             config.LiftFn(player, continue, data.ActiveSlot, data.Mimic)
@@ -497,10 +497,10 @@ return {Init = function ()
 
         ThrowableItemLib.Internal:ResetHeldData(data)
 
-        if REPENTOGON then
-            ---@diagnostic disable-next-line: undefined-field
-            player:SetItemState(CollectibleType.COLLECTIBLE_NULL)
-        end
+        -- if REPENTOGON then
+        --     ---@diagnostic disable-next-line: undefined-field
+        --     player:SetItemState(CollectibleType.COLLECTIBLE_NULL)
+        -- end
     end
 
     ---@param player EntityPlayer
