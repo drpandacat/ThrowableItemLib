@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.3.4
+    Version 1.3.5
 ]]
 
 ---@class ThrowableItemConfig
@@ -19,11 +19,14 @@
 ---@field ID CollectibleType
 ---@field Condition fun(card: ItemConfigCard, player: EntityPlayer): boolean
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
+---@field SetVarData? boolean
 
 local VERSION = 1.25
 
 return {Init = function ()
+    ---@type table<string, table<string, ThrowableItemConfig>>
     local configs = {}
+    ---@type table<CollectibleType, MimicItemConfig>
     local mimics = {}
 
     if ThrowableItemLib then
@@ -31,14 +34,10 @@ return {Init = function ()
             return
         end
 
-        for k, v in pairs(ThrowableItemLib.Internal.Configs) do
-            configs[k] = v
-        end
+        configs = ThrowableItemLib.Internal.Configs
 
         if ThrowableItemLib.Internal.MimicItems then
-            for k, v in pairs(ThrowableItemLib.Internal.MimicItems) do
-                mimics[k] = v
-            end
+            mimics = ThrowableItemLib.Internal.MimicItems
         end
 
         ThrowableItemLib.Internal:ClearCallbacks()
@@ -51,9 +50,9 @@ return {Init = function ()
     ThrowableItemLib.Internal.VERSION = VERSION
     ThrowableItemLib.Internal.CallbackEntries = {}
     ---@type table<string, ThrowableItemConfig[]>
-    ThrowableItemLib.Internal.Configs = configs or {}
+    ThrowableItemLib.Internal.Configs = configs
     ---@type table<CollectibleType, MimicItemConfig>
-    ThrowableItemLib.Internal.MimicConfigs = mimics or {}
+    ThrowableItemLib.Internal.MimicConfigs = mimics
 
     ---@param tbl table
     function ThrowableItemLib.Internal:PrioritySort(tbl)
@@ -63,8 +62,6 @@ return {Init = function ()
             end)
         end
     end
-
-    ThrowableItemLib.Internal:PrioritySort(ThrowableItemLib.Internal.Configs)
 
     ---@param id ModCallbacks
     ---@param fn function
@@ -144,6 +141,8 @@ return {Init = function ()
         THROW = 3
     }
 
+    ThrowableItemLib.Internal.LIFT_FRAME_DELAY = 9
+
     function ThrowableItemLib.Internal:ClearCallbacks()
         for _, v in ipairs(ThrowableItemLib.Internal.CallbackEntries) do
             ThrowableItemLib:RemoveCallback(v.ID, v.FN)
@@ -157,16 +156,17 @@ return {Init = function ()
         data.__THROWABLE_ITEM_LIBRARY = data.__THROWABLE_ITEM_LIBRARY or {}
 
         ---@class ThrowableItemData
-        ---@field HeldConfig? ThrowableItemConfig
-        ---@field ActiveSlot? ActiveSlot
-        ---@field ThrownItem? CollectibleType | Card
-        ---@field ForceInputSlot? ActiveSlot
-        ---@field Mimic? CollectibleType
-        ---@field ScheduleHide? boolean
-        ---@field UsedPocket? boolean
-        ---@field UsedMimic? CollectibleType
-        ---@field ScheduleLift? table[]
-        ---@field ScheduleHideAnim? function
+        ---@field HeldConfig ThrowableItemConfig
+        ---@field ActiveSlot ActiveSlot?
+        ---@field ThrownItem CollectibleType | Card?
+        ---@field ForceInputSlot ActiveSlot
+        ---@field Mimic CollectibleType?
+        ---@field ScheduleHide boolean
+        ---@field UsedPocket boolean
+        ---@field UsedMimic CollectibleType
+        ---@field ScheduleLift table[]
+        ---@field ScheduleHideAnim function
+        ---@field LiftFrame integer
         return data.__THROWABLE_ITEM_LIBRARY
     end
 
@@ -175,6 +175,7 @@ return {Init = function ()
         data.ActiveSlot = nil
         data.HeldConfig = nil
         data.Mimic = nil
+        data.LiftFrame = nil
     end
 
     ---@param id CollectibleType | Card
@@ -267,15 +268,17 @@ return {Init = function ()
             elseif data.Mimic then
                 data.UsedMimic = data.HeldConfig.ID
 
-                if ThrowableItemLib.Internal.MimicConfigs[data.Mimic].PrimaryLift then
-                    data.ForceInputSlot = data.ActiveSlot
-                else
-                    player:DischargeActiveItem(data.ActiveSlot)
-                end
+                if ThrowableItemLib.Internal.MimicConfigs[data.Mimic]then
+                    if ThrowableItemLib.Internal.MimicConfigs[data.Mimic].PrimaryLift then
+                        data.ForceInputSlot = data.ActiveSlot
+                    else
+                        player:DischargeActiveItem(data.ActiveSlot)
+                    end
 
-                if REPENTOGON then
-                    ---@diagnostic disable-next-line: undefined-field
-                    player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
+                    if REPENTOGON and ThrowableItemLib.Internal.MimicConfigs[data.Mimic].SetVarData then
+                        ---@diagnostic disable-next-line: undefined-field
+                        player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
+                    end
                 end
             else
                 local item = card and player:GetActiveItem(data.ActiveSlot) or data.HeldConfig.ID
@@ -300,18 +303,27 @@ return {Init = function ()
     end
 
     ---@param player EntityPlayer
-    ---@param disableClamp? boolean
     ---@return Vector
-    function ThrowableItemLib.Utility:GetAimVect(player, disableClamp)
-        local vect = player:GetAimDirection()
-        local returnVect = Vector(vect.X, vect.Y)
+    function ThrowableItemLib.Utility:GetAimVect(player)
+        local data = ThrowableItemLib.Internal:GetData(player)
 
-        if not disableClamp then
-            if returnVect:Length() > 0.001 then
-                if not player:HasCollectible(CollectibleType.COLLECTIBLE_MARKED) and not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK) then
-                    returnVect = ThrowableItemLib.Utility:CardinalClamp(returnVect)
-                end
+        if data.LiftFrame and player.FrameCount - data.LiftFrame < ThrowableItemLib.Internal.LIFT_FRAME_DELAY then
+            return Vector.Zero
+        end
+
+        ---@type Vector
+        local returnVect
+
+        if player.ControllerIndex == 0 and Options.MouseControl then
+            if Input.IsMouseBtnPressed(0) then
+                returnVect = (Input.GetMousePosition(true) - player.Position):Normalized()
             end
+        end
+
+        returnVect = returnVect or player:GetShootingInput()
+
+        if returnVect:Length() > 0.001 and not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK) then
+            returnVect = ThrowableItemLib.Utility:CardinalClamp(returnVect)
         end
 
         return returnVect
@@ -376,7 +388,6 @@ return {Init = function ()
     ---@param mimic? CollectibleType
     function ThrowableItemLib.Utility:LiftItem(player, id, type, slot, continue, mimic)
         local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, type))
-
         if not config then return end
 
         local data = ThrowableItemLib.Internal:GetData(player)
@@ -384,6 +395,7 @@ return {Init = function ()
         data.HeldConfig = config
         data.ActiveSlot = slot
         data.Mimic = mimic
+        data.LiftFrame = player.FrameCount
 
         if not (config.AnimateFn and config.AnimateFn(player, ThrowableItemLib.State.LIFT)) then
             if type == ThrowableItemLib.Type.ACTIVE then
@@ -458,7 +470,6 @@ return {Init = function ()
     ---@param throw? boolean
     function ThrowableItemLib.Utility:HideItem(player, throw)
         local data = ThrowableItemLib.Internal:GetData(player)
-
         if not data.HeldConfig then return end
 
         local active = data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE
@@ -608,10 +619,7 @@ return {Init = function ()
         if hook == InputHook.IS_ACTION_TRIGGERED then
             if action == ButtonAction.ACTION_ITEM then
                 local player = entity and entity:ToPlayer()
-
-                if not player then
-                    return
-                end
+                if not player then return end
 
                 local data = ThrowableItemLib.Internal:GetData(player)
                 local type = player:GetPlayerType()
@@ -644,10 +652,7 @@ return {Init = function ()
                 end
             elseif action == ButtonAction.ACTION_PILLCARD then
                 local player = entity and entity:ToPlayer()
-
-                if not player then
-                    return
-                end
+                if not player then return end
 
                 local data = ThrowableItemLib.Internal:GetData(player)
                 local type = player:GetPlayerType()
@@ -796,11 +801,17 @@ return {Init = function ()
         data.UsedPocket = nil
         data.ThrownItem = nil
 
-        if data.ScheduleLift and controlsEnabled and not data.HeldConfig then
-            for i, v in pairs(data.ScheduleLift) do
-                ThrowableItemLib.Utility:LiftItem(table.unpack(v))
-                table.remove(data.ScheduleLift, i)
-                break
+        if data.ScheduleLift and controlsEnabled and not data.HeldConfig and not data.ScheduleHide and player:IsExtraAnimationFinished() then
+            if data.ScheduleLift[1] then
+                ThrowableItemLib.Utility:LiftItem(table.unpack(data.ScheduleLift[1]))
+
+                local tbl = {}
+
+                for i = 2, #data.ScheduleLift do
+                    tbl[#tbl + 1] = data.ScheduleLift[i]
+                end
+
+                data.ScheduleLift = tbl
             end
         end
     end)
@@ -865,9 +876,7 @@ return {Init = function ()
 
         if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
             data.ScheduleLift = data.ScheduleLift or {}
-
             table.insert(data.ScheduleLift, {player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, id})
-
             return true
         elseif condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
             return true
@@ -925,6 +934,7 @@ return {Init = function ()
             return card:IsCard()
         end,
         PrimaryLift = not REPENTOGON,
+        SetVarData = true,
     })
 
     ThrowableItemLib.Utility:RegisterMimicItem({
@@ -933,6 +943,7 @@ return {Init = function ()
             return card:IsRune()
         end,
         PrimaryLift = not REPENTOGON,
+        SetVarData = true,
     })
 
     local function RegisterPGO()
