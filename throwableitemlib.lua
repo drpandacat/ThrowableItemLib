@@ -856,7 +856,7 @@ return {Init = function ()
 
         data.ForceInputSlot = nil
 
-        if data.ThrownItem or player:HasCollectible(id) then return end
+        if data.ThrownItem or slot ~= -1 then return end
 
         local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE))
 
