@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.3.5
+    Version 1.4
 ]]
 
 ---@class ThrowableItemConfig
@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 1.25
+local VERSION = 2
 
 return {Init = function ()
     ---@type table<string, table<string, ThrowableItemConfig>>
@@ -49,9 +49,7 @@ return {Init = function ()
     ThrowableItemLib.Internal = {}
     ThrowableItemLib.Internal.VERSION = VERSION
     ThrowableItemLib.Internal.CallbackEntries = {}
-    ---@type table<string, ThrowableItemConfig[]>
     ThrowableItemLib.Internal.Configs = configs
-    ---@type table<CollectibleType, MimicItemConfig>
     ThrowableItemLib.Internal.MimicConfigs = mimics
 
     ---@param tbl table
@@ -102,20 +100,20 @@ return {Init = function ()
         DISABLE_HIDE = 1 << 3,
         ---Item lift persists when animation is interrupted 
         PERSISTENT = 1 << 4,
-        ---Does not trigger item use upon throw. Useful for preventing on-use effects
+        ---Does not trigger item use on throw. Useful for preventing on-use effects
         DISABLE_ITEM_USE = 1 << 5,
         ---Uses PlayerPickup instead of PlayerPickupSparkle
         NO_SPARKLE = 1 << 6,
-        ---Shows the animation so beware
-        ENABLE_CARD_USE = 1 << 9,
-        ---Attempts to hide use animation if item use is activated manually
-        TRY_HIDE_ANIM = 1 << 10,
         ---Disables throw
         DISABLE_THROW = 1 << 11,
         ---@deprecated
         EMPTY_HIDE = 1 << 7,
         ---@deprecated
         EMPTY_THROW = 1 << 8,
+        ---@deprecated
+        ENABLE_CARD_USE = 1 << 9,
+        ---@deprecated
+        TRY_HIDE_ANIM = 1 << 10,
     }
 
     ---@enum ThrowableItemType
@@ -130,7 +128,7 @@ return {Init = function ()
         DEFAULT_USE = 1,
         ---Item will be lifted
         ALLOW_HOLD = 2,
-        ---Item will not be lifted or used
+        ---Item will neither be lifted nor used
         DISABLE_USE = 3,
     }
 
@@ -158,15 +156,16 @@ return {Init = function ()
         ---@class ThrowableItemData
         ---@field HeldConfig ThrowableItemConfig
         ---@field ActiveSlot ActiveSlot?
-        ---@field ThrownItem CollectibleType | Card?
+        ---@field ThrownItem ThrowableItemConfig?
         ---@field ForceInputSlot ActiveSlot
         ---@field Mimic CollectibleType?
         ---@field ScheduleHide boolean
         ---@field UsedPocket boolean
-        ---@field UsedMimic CollectibleType
+        ---@field UsedMimic boolean
         ---@field ScheduleLift table[]
         ---@field ScheduleHideAnim function
         ---@field LiftFrame integer
+        ---@field QuestionMarkCard boolean
         return data.__THROWABLE_ITEM_LIBRARY
     end
 
@@ -260,44 +259,36 @@ return {Init = function ()
     ---@param data ThrowableItemData
     ---@param card boolean?
     function ThrowableItemLib.Internal:ThrowItem(player, data, card)
-        if data.ActiveSlot then
-            if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
-                if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                    player:SetActiveCharge(player:GetActiveCharge(data.ActiveSlot) - ThrowableItemLib.Utility:GetMaxCharge(player, data.ActiveSlot), data.ActiveSlot)
-                end
-            elseif data.Mimic then
-                data.UsedMimic = data.HeldConfig.ID
+        if card then
+            if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
+                player:UseCard(data.HeldConfig.ID, UseFlag.USE_NOANIM)
+            end
 
-                if ThrowableItemLib.Internal.MimicConfigs[data.Mimic]then
-                    if ThrowableItemLib.Internal.MimicConfigs[data.Mimic].PrimaryLift then
-                        data.ForceInputSlot = data.ActiveSlot
-                    else
-                        player:DischargeActiveItem(data.ActiveSlot)
-                    end
-
-                    if REPENTOGON and ThrowableItemLib.Internal.MimicConfigs[data.Mimic].SetVarData then
-                        ---@diagnostic disable-next-line: undefined-field
-                        player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
-                    end
-                end
-            else
-                local item = card and player:GetActiveItem(data.ActiveSlot) or data.HeldConfig.ID
-
-                if not data.Mimic or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE) then
-                    ---@diagnostic disable-next-line: param-type-mismatch
-                    player:UseActiveItem(item, ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.TRY_HIDE_ANIM) and UseFlag.USE_NOANIM or 0, data.ActiveSlot)
-                end
-
-                if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
+            if data.Mimic and ThrowableItemLib.Internal.MimicConfigs[data.Mimic] and data.ActiveSlot > -1 then
+                if ThrowableItemLib.Internal.MimicConfigs[data.Mimic].PrimaryLift then
+                    data.ForceInputSlot = data.ActiveSlot
+                else
                     player:DischargeActiveItem(data.ActiveSlot)
+                end
+
+                if REPENTOGON and ThrowableItemLib.Internal.MimicConfigs[data.Mimic].SetVarData then
+                    ---@diagnostic disable-next-line: undefined-field
+                    player:GetActiveItemDesc(data.ActiveSlot).VarData = Isaac.GetItemConfig():GetCard(data.HeldConfig.ID).MimicCharge or 4
                 end
             end
         else
-            local item = card and player:GetActiveItem(data.ActiveSlot) or data.HeldConfig.ID
+            if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
+                if not data.Mimic and not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
+                    player:SetActiveCharge(player:GetActiveCharge(data.ActiveSlot) - ThrowableItemLib.Utility:GetMaxCharge(player, data.ActiveSlot), data.ActiveSlot)
+                end
+            else
+                player:UseActiveItem(data.HeldConfig.ID, UseFlag.USE_NOANIM)
 
-            if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE) then
-                ---@diagnostic disable-next-line: param-type-mismatch
-                player:UseActiveItem(item, ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.TRY_HIDE_ANIM) and UseFlag.USE_NOANIM or 0, ActiveSlot.SLOT_PRIMARY)
+                if not data.Mimic and data.ActiveSlot and data.ActiveSlot > -1 then
+                    if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
+                        player:DischargeActiveItem(data.ActiveSlot)
+                    end
+                end
             end
         end
     end
@@ -433,23 +424,17 @@ return {Init = function ()
         if data.Mimic then
             ThrowableItemLib.Internal:ThrowItem(player, data, true)
         else
-            if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.ENABLE_CARD_USE)
-            or ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
-                if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                    if REPENTOGON then
-                        ---@diagnostic disable-next-line: undefined-field
-                        player:RemovePocketItem(PillCardSlot.PRIMARY)
-                    else
-                        player:SetCard(0, 0)
-                    end
-                end
-            else
-                if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                    ---@diagnostic disable-next-line: param-type-mismatch
-                    player:UseCard(data.HeldConfig.ID, ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.TRY_HIDE_ANIM) and UseFlag.USE_NOANIM or 0)
+            if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
+                if REPENTOGON then
+                    ---@diagnostic disable-next-line: undefined-field
+                    player:RemovePocketItem(PillCardSlot.PRIMARY)
                 else
-                    data.ForceInputSlot = ActiveSlot.SLOT_POCKET
+                    player:SetCard(0, 0)
                 end
+            end
+
+            if not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
+                player:UseCard(data.HeldConfig.ID, UseFlag.USE_NOANIM)
             end
         end
     end
@@ -474,15 +459,15 @@ return {Init = function ()
 
         local active = data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE
 
-        data.ThrownItem = throw and data.HeldConfig.ID or nil
+        data.ThrownItem = throw and data.HeldConfig or nil
 
         if not data.Mimic or not throw then
             ThrowableItemLib.Internal:AnimateHide(player, data.HeldConfig, throw)
         else
-            local id = data.HeldConfig.ID
+            local config = data.HeldConfig
 
             data.ScheduleHideAnim = function ()
-                ThrowableItemLib.Internal:AnimateHide(player, {ID = id}, throw)
+                ThrowableItemLib.Internal:AnimateHide(player, config, throw)
             end
         end
 
@@ -850,13 +835,16 @@ return {Init = function ()
 
     ---@param id CollectibleType
     ---@param player EntityPlayer
+    ---@param flags UseFlag
     ---@param slot ActiveSlot
-    AddPriorityCallback(ModCallbacks.MC_PRE_USE_ITEM, CallbackPriority.IMPORTANT, function (_, id, _, player, _, slot)
+    AddPriorityCallback(ModCallbacks.MC_PRE_USE_ITEM, CallbackPriority.IMPORTANT, function (_, id, _, player, flags, slot)
         local data = ThrowableItemLib.Internal:GetData(player)
 
         data.ForceInputSlot = nil
 
-        if data.ThrownItem or slot ~= -1 then return end
+        if data.ThrownItem or (slot ~= -1 and not data.QuestionMarkCard) then return end
+
+        data.QuestionMarkCard = nil
 
         local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE))
 
@@ -876,7 +864,7 @@ return {Init = function ()
 
         if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
             data.ScheduleLift = data.ScheduleLift or {}
-            table.insert(data.ScheduleLift, {player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, id})
+            table.insert(data.ScheduleLift, {player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, 0})
             return true
         elseif condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
             return true
@@ -888,6 +876,8 @@ return {Init = function ()
     AddPriorityCallback(ModCallbacks.MC_USE_ITEM, CallbackPriority.LATE, function (_, id, _, player)
         local data = ThrowableItemLib.Internal:GetData(player)
 
+        data.QuestionMarkCard = nil
+
         if data.ScheduleHideAnim then
             data.ScheduleHideAnim()
             data.ScheduleHideAnim = nil
@@ -895,16 +885,33 @@ return {Init = function ()
     end)
 
     if REPENTOGON then
+        ---@param id Card
         ---@param player EntityPlayer
         ---@diagnostic disable-next-line: undefined-field
-        AddPriorityCallback(ModCallbacks.MC_PRE_USE_CARD, CallbackPriority.EARLY, function (_, _, player)
+        AddPriorityCallback(ModCallbacks.MC_PRE_USE_CARD, CallbackPriority.EARLY, function (_, id, player)
             local data = ThrowableItemLib.Internal:GetData(player)
 
             data.UsedPocket = true
             data.ForceInputSlot = nil
+            data.QuestionMarkCard = id == Card.CARD_QUESTIONMARK
 
             if data.UsedMimic then
                 data.UsedMimic = nil
+                return true
+            end
+
+            if data.ThrownItem then return end
+
+            local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.CARD))
+            if not config then return end
+
+            local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
+
+            if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
+                data.ScheduleLift = data.ScheduleLift or {}
+                table.insert(data.ScheduleLift, {player, config.ID, config.Type, nil, nil, 0})
+                return true
+            elseif condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
                 return true
             end
         end)
@@ -915,6 +922,7 @@ return {Init = function ()
 
             data.UsedPocket = true
             data.ForceInputSlot = nil
+            data.QuestionMarkCard = nil
 
             if data.UsedMimic then
                 data.UsedMimic = nil
