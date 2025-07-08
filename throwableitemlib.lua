@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.4
+    Version 1.4.1
 ]]
 
 ---@class ThrowableItemConfig
@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 2
+local VERSION = 3
 
 return {Init = function ()
     ---@type table<string, table<string, ThrowableItemConfig>>
@@ -137,6 +137,66 @@ return {Init = function ()
         LIFT = 1,
         HIDE = 2,
         THROW = 3
+    }
+
+    ---@enum ThrowableItemCallback
+    ---Optional `string` key parameter
+    ThrowableItemLib.Callback = {
+        ---Called before lifting a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* continue - `boolean`
+        ---* slot - `ActiveSlot?`
+        ---
+        ---Returns:
+        ---* Return `true` to cancel lift
+        PRE_LIFT = "THROWABLE_ITEM_LIBRARY_PRE_LIFT",
+        ---Called after lifting a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* continue - `boolean`
+        ---* slot - `ActiveSlot?`
+        POST_LIFT = "THROWABLE_ITEM_LIBRARY_POST_LIFT",
+        ---Called before hiding a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* throw - `boolean`
+        PRE_HIDE = "THROWABLE_ITEM_LIBRARY_PRE_HIDE",
+        ---Called after hiding a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* throw - `boolean`
+        POST_HIDE = "THROWABLE_ITEM_LIBRARY_POST_HIDE",
+        ---Called before throwing a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* vect - `Vector`
+        ---* slot - `ActiveSlot?`
+        ---* mimic - `CollectibleType?`
+        ---Returns:
+        ---
+        ---* Return `true` to prevet throw entirely
+        ---* Return `false` to cancel throw effects
+        PRE_THROW = "THROWABLE_ITEM_LIBRARY_PRE_THROW",
+        ---Called ater throwing a custom throwable item
+        ---
+        ---Parameters:
+        ---* player - `EntityPlayer`
+        ---* config - `ThrowableItemConfig`
+        ---* vect - `Vector`
+        ---* slot - `ActiveSlot?`
+        ---* mimic - `CollectibleType?`
+        POST_THROW = "THROWABLE_ITEM_LIBRARY_POST_THROW",
     }
 
     ThrowableItemLib.Internal.LIFT_FRAME_DELAY = 9
@@ -378,8 +438,11 @@ return {Init = function ()
     ---@param continue? boolean
     ---@param mimic? CollectibleType
     function ThrowableItemLib.Utility:LiftItem(player, id, type, slot, continue, mimic)
-        local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, type))
+        local key = ThrowableItemLib.Internal:GetHeldConfigKey(id, type)
+        local config = ThrowableItemLib.Utility:GetConfig(player, key)
         if not config then return end
+
+        if Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.PRE_LIFT, key, player, config, continue, slot) then return end
 
         local data = ThrowableItemLib.Internal:GetData(player)
 
@@ -404,6 +467,20 @@ return {Init = function ()
         if config.LiftFn then
             config.LiftFn(player, continue, data.ActiveSlot, data.Mimic)
         end
+
+        Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.POST_LIFT, key, player, config, continue, slot)
+    end
+
+    ---@param player EntityPlayer
+    ---@param id CollectibleType | Card
+    ---@param type ThrowableItemType
+    ---@param slot? ActiveSlot
+    ---@param continue? boolean
+    ---@param mimic? CollectibleType
+    function ThrowableItemLib.Utility:ScheduleLift(player, id, type, slot, continue, mimic)
+        local data = ThrowableItemLib.Internal:GetData(player)
+        data.ScheduleLift = data.ScheduleLift or {}
+        table.insert(data.ScheduleLift, {player, id, type, slot, continue, mimic})
     end
 
     ---@param player EntityPlayer
@@ -455,17 +532,20 @@ return {Init = function ()
     ---@param throw? boolean
     function ThrowableItemLib.Utility:HideItem(player, throw)
         local data = ThrowableItemLib.Internal:GetData(player)
-        if not data.HeldConfig then return end
+        local config = data.HeldConfig
+        if not config then return end
 
-        local active = data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE
+        local key = ThrowableItemLib.Internal:GetHeldConfigKey(config.ID, config.Type)
 
-        data.ThrownItem = throw and data.HeldConfig or nil
+        Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.PRE_HIDE, key, player, config, throw)
+
+        local active = config.Type == ThrowableItemLib.Type.ACTIVE
+
+        data.ThrownItem = throw and config or nil
 
         if not data.Mimic or not throw then
-            ThrowableItemLib.Internal:AnimateHide(player, data.HeldConfig, throw)
+            ThrowableItemLib.Internal:AnimateHide(player, config, throw)
         else
-            local config = data.HeldConfig
-
             data.ScheduleHideAnim = function ()
                 ThrowableItemLib.Internal:AnimateHide(player, config, throw)
             end
@@ -478,11 +558,11 @@ return {Init = function ()
                 ThrowableItemLib.Internal:ThrowCard(player, data)
             end
         else
-            if data.HeldConfig.HideFn then
-                data.HeldConfig.HideFn(player, data.ActiveSlot, data.Mimic)
+            if config.HideFn then
+                config.HideFn(player, data.ActiveSlot, data.Mimic)
             end
 
-            if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISCHARGE_HIDE) then
+            if ThrowableItemLib.Utility:HasFlags(config.Flags, ThrowableItemLib.Flag.DISCHARGE_HIDE) then
                 if active then
                     ThrowableItemLib.Internal:ThrowItem(player, data)
                 else
@@ -493,10 +573,7 @@ return {Init = function ()
 
         ThrowableItemLib.Internal:ResetHeldData(data)
 
-        -- if REPENTOGON then
-        --     ---@diagnostic disable-next-line: undefined-field
-        --     player:SetItemState(CollectibleType.COLLECTIBLE_NULL)
-        -- end
+        Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.POST_HIDE, key, player, config, throw)
     end
 
     ---@param player EntityPlayer
@@ -825,10 +902,22 @@ return {Init = function ()
                     ThrowableItemLib.Internal:ResetHeldData(data)
                 end
             elseif ThrowableItemLib.Utility:IsShooting(player) and not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_THROW) then
-                if data.HeldConfig.ThrowFn then
-                    data.HeldConfig.ThrowFn(player, ThrowableItemLib.Utility:GetAimVect(player), data.ActiveSlot, data.Mimic)
+                local key = ThrowableItemLib.Internal:GetHeldConfigKey(data.HeldConfig.ID, data.HeldConfig.Type)
+                local vect = ThrowableItemLib.Utility:GetAimVect(player)
+                local config = data.HeldConfig
+                local slot = data.ActiveSlot
+                local mimic = data.Mimic
+
+                local ret = Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.PRE_THROW, key, player, config, vect, slot, mimic)
+                if ret then return end
+
+                if ret ~= false and data.HeldConfig.ThrowFn then
+                    data.HeldConfig.ThrowFn(player, vect, data.ActiveSlot, data.Mimic)
                 end
+
                 ThrowableItemLib.Utility:HideItem(player, true)
+
+                Isaac.RunCallbackWithParam(ThrowableItemLib.Callback.POST_THROW, key, player, config, vect, slot, mimic)
             end
         end
     end)
@@ -863,8 +952,7 @@ return {Init = function ()
         local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
 
         if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
-            data.ScheduleLift = data.ScheduleLift or {}
-            table.insert(data.ScheduleLift, {player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, 0})
+            ThrowableItemLib.Utility:ScheduleLift(player, config.ID, config.Type, slot ~= -1 and slot or ActiveSlot.SLOT_PRIMARY, nil, 0)
             return true
         elseif condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
             return true
@@ -908,8 +996,7 @@ return {Init = function ()
             local condition = ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, config)
 
             if condition == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
-                data.ScheduleLift = data.ScheduleLift or {}
-                table.insert(data.ScheduleLift, {player, config.ID, config.Type, nil, nil, 0})
+                ThrowableItemLib.Utility:ScheduleLift(player, config.ID, config.Type, nil, nil, 0)
                 return true
             elseif condition == ThrowableItemLib.HoldConditionReturnType.DISABLE_USE then
                 return true
