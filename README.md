@@ -1,11 +1,12 @@
 ## ThrowableItemLib
 - Easily create active items and consumables that follow the lift, hide, and throw behavior of items like Bob’s Rotten Head or The Candle
-- Proper item interactions with Void, Metronome, and on-use effects such as Book of Virtues and 'M
+- Proper item interactions with Void, Metronome, ? Card, and on-use effects such as Book of Virtues and 'M + more
 - Blank Card, Clear Rune, and Fiend Folio Perfectly Generic Object support for throwable cards, runes, and objects, also allowing for registering custom pocket mimic items
 - 10 flags to modify default lift, throw, and hide behavior
+- 6 callbacks for detecting and modifying custom throwable item behavior
 - Hold Condition system to allow for control over disabled, default, or allowed lift item use
-- Support for multiple configs per item, avoiding mod incompatibilities when adding throw behavior to vanilla items
 - Allows for dynamically changing the sprite that is lifted, hidden, or thrown
+- Support for multiple configs per item, avoiding mod incompatibilities when adding throw behavior to vanilla items
 
 | Cool Void support!  | Cool pocket item support! |
 | ------------- | ------------- |
