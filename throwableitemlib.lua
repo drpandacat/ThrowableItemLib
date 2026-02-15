@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5
+    Version 1.5.2
 ]]
 
 ---@class ThrowableItemConfig
@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 4
+local VERSION = 6
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
@@ -351,6 +351,10 @@ function ThrowableItemLib.Internal:ThrowItem(player, data, card)
                 end
             end
         end
+
+        if data.ActiveSlot == ActiveSlot.SLOT_POCKET2 then
+            player:SetPocketActiveItem(CollectibleType.COLLECTIBLE_NULL, ActiveSlot.SLOT_POCKET2)
+        end
     end
 end
 
@@ -610,8 +614,9 @@ end
 
 ---@param player EntityPlayer
 ---@param activeSlot ActiveSlot
+---@param mimic? CollectibleType
 ---@return ThrowableItemConfig?
-function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot)
+function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot, mimic)
     local data = ThrowableItemLib.Internal:GetData(player)
 
     if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.CARD then
@@ -620,7 +625,16 @@ function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot)
 
     local card, slot = ThrowableItemLib.Utility:GetFirstCard(player)
 
-    if slot < 0 or (slot > 0 and not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player)) then
+    if slot < 0 then
+        return
+    end
+
+    if mimic then
+        if not ThrowableItemLib.Internal:MimicCondition(mimic, player) then
+            return
+        end
+    elseif activeSlot == -1
+    or not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player) then
         return
     end
 
@@ -628,17 +642,30 @@ function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot)
 end
 
 ---@param player EntityPlayer
----@return ThrowableItemConfig?
+---@return ThrowableItemConfig?, ActiveSlot?
 function ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
     local data = ThrowableItemLib.Internal:GetData(player)
 
     if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.ACTIVE and data.ActiveSlot == ActiveSlot.SLOT_POCKET then
-        return data.HeldConfig
+        return data.HeldConfig, data.ActiveSlot
     end
 
-    if not (player:GetCard(0) == Card.CARD_NULL and player:GetPill(0) == PillColor.PILL_NULL) then return end
+    if player:GetCard(0) ~= Card.CARD_NULL or player:GetPill(0) ~= PillColor.PILL_NULL then return end
 
-    return ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(ActiveSlot.SLOT_POCKET), ThrowableItemLib.Type.ACTIVE))
+    local slot = ActiveSlot.SLOT_POCKET
+
+    if REPENTOGON then
+        slot = player:GetPocketItem(PillCardSlot.PRIMARY):GetSlot() - 1
+        if slot == -1 then return end
+    else
+        if player:GetActiveItem(ActiveSlot.SLOT_POCKET2) ~= 0 then -- Prioritize pocket2. I wish there was more I can do
+            slot = ActiveSlot.SLOT_POCKET2
+        else
+            slot = ActiveSlot.SLOT_POCKET
+        end
+    end
+
+    return ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(player:GetActiveItem(slot), ThrowableItemLib.Type.ACTIVE)), slot
 end
 
 ---@param config ThrowableItemConfig
@@ -842,21 +869,23 @@ AddCallback(ModCallbacks.MC_POST_PLAYER_UPDATE, function(_, player)
         end
 
         if ThrowableItemLib.Utility:GetPocketInput(player, Input.IsActionTriggered) and not data.UsedPocket then
-            ThrowableItemLib.Internal:TryLift(player, data, ThrowableItemLib.Utility:GetThrowablePocketConfig(player), ActiveSlot.SLOT_POCKET)
+            local pocket, slot = ThrowableItemLib.Utility:GetThrowablePocketConfig(player)
 
-            local configThrow = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
+            ThrowableItemLib.Internal:TryLift(player, data, pocket, slot)
 
-            if configThrow then
+            local card = ThrowableItemLib.Utility:GetThrowableCardConfig(player, ActiveSlot.SLOT_POCKET)
+
+            if card then
                 local cardID, cardSlot = ThrowableItemLib.Utility:GetFirstCard(player)
 
                 if cardSlot == 0 then
-                    if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.CARD and data.HeldConfig.ID == configThrow.ID then
+                    if data.HeldConfig and data.HeldConfig.Type == ThrowableItemLib.Type.CARD and data.HeldConfig.ID == card.ID then
                         data.ScheduleHide = true
-                    elseif ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, configThrow) == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
+                    elseif ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, card) == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
                         ThrowableItemLib.Utility:LiftItem(player, cardID, ThrowableItemLib.Type.CARD)
                     end
                 else
-                    ThrowableItemLib.Internal:TryMimic(player, data, configThrow, ActiveSlot.SLOT_POCKET)
+                    ThrowableItemLib.Internal:TryMimic(player, data, card, ActiveSlot.SLOT_POCKET)
                 end
             end
         end
@@ -940,7 +969,7 @@ AddPriorityCallback(ModCallbacks.MC_PRE_USE_ITEM, CallbackPriority.IMPORTANT, fu
     local config = ThrowableItemLib.Utility:GetConfig(player, ThrowableItemLib.Internal:GetHeldConfigKey(id, ThrowableItemLib.Type.ACTIVE))
 
     if ThrowableItemLib.Internal:MimicCondition(id, player) then
-        local throwConfigCard = ThrowableItemLib.Utility:GetThrowableCardConfig(player, slot)
+        local throwConfigCard = ThrowableItemLib.Utility:GetThrowableCardConfig(player, slot, id)
 
         if throwConfigCard and ThrowableItemLib.Utility:ShouldLiftThrowableItem(player, throwConfigCard) == ThrowableItemLib.HoldConditionReturnType.ALLOW_HOLD then
             config = throwConfigCard
@@ -963,7 +992,8 @@ end)
 
 ---@param id CollectibleType
 ---@param player EntityPlayer
-AddPriorityCallback(ModCallbacks.MC_USE_ITEM, CallbackPriority.LATE, function (_, id, _, player)
+---@param slot ActiveSlot
+AddPriorityCallback(ModCallbacks.MC_USE_ITEM, CallbackPriority.LATE, function (_, id, _, player, _, slot)
     local data = ThrowableItemLib.Internal:GetData(player)
 
     data.QuestionMarkCard = nil
@@ -971,6 +1001,10 @@ AddPriorityCallback(ModCallbacks.MC_USE_ITEM, CallbackPriority.LATE, function (_
     if data.ScheduleHideAnim then
         data.ScheduleHideAnim()
         data.ScheduleHideAnim = nil
+    end
+
+    if slot == ActiveSlot.SLOT_POCKET or slot == ActiveSlot.SLOT_POCKET2 then
+        data.UsedPocket = true
     end
 end)
 
