@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.2
+    Version 1.5.3
 ]]
 
 ---@class ThrowableItemConfig
@@ -412,8 +412,16 @@ function ThrowableItemLib.Utility:GetMaxCharge(player, slot)
     if not item or item == 0 then
         return 0
     end
+
+    local config = Isaac.GetItemConfig():GetCollectible(item)
     ---@diagnostic disable-next-line: undefined-field
-    return REPENTOGON and player:GetActiveMinUsableCharge(slot) or Isaac.GetItemConfig():GetCollectible(item).MaxCharges
+    local charges = REPENTOGON and player:GetActiveMinUsableCharge(slot) or config.MaxCharges
+
+    if config.ChargeType == 1 then
+        return charges > 0 and 1 or 0
+    end
+
+    return charges
 end
 
 ---@param player EntityPlayer
