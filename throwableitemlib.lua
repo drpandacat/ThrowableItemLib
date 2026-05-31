@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.3
+    Version 1.5.4
 ]]
 
 ---@class ThrowableItemConfig
@@ -405,12 +405,12 @@ end
 
 ---@param player EntityPlayer
 ---@param slot ActiveSlot
----@return integer
+---@return integer, integer Unadjusted
 function ThrowableItemLib.Utility:GetMaxCharge(player, slot)
     local item = player:GetActiveItem(slot)
 
     if not item or item == 0 then
-        return 0
+        return 0, 0
     end
 
     local config = Isaac.GetItemConfig():GetCollectible(item)
@@ -418,16 +418,21 @@ function ThrowableItemLib.Utility:GetMaxCharge(player, slot)
     local charges = REPENTOGON and player:GetActiveMinUsableCharge(slot) or config.MaxCharges
 
     if config.ChargeType == 1 then
-        return charges > 0 and 1 or 0
+        return charges > 0 and 1 or 0, charges
     end
 
-    return charges
+    return charges, charges
 end
 
 ---@param player EntityPlayer
 ---@param slot ActiveSlot
 function ThrowableItemLib.Utility:NeedsCharge(player, slot)
-    return player:GetActiveCharge(slot) + player:GetBloodCharge() + player:GetSoulCharge() < ThrowableItemLib.Utility:GetMaxCharge(player, slot)
+    local max, unadjusted = ThrowableItemLib.Utility:GetMaxCharge(player, slot)
+    local charge = player:GetActiveCharge(slot)
+    return (unadjusted ~= max and charge < unadjusted and 0 or charge)
+    + player:GetBloodCharge()
+    + player:GetSoulCharge()
+    < max
 end
 
 ---@param player EntityPlayer
