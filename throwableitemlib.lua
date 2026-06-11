@@ -30,7 +30,7 @@ local mimics = {}
 
 if ThrowableItemLib then
     if ThrowableItemLib.Internal.VERSION > VERSION then
-        return
+        return {Init = function () end}
     end
 
     configs = ThrowableItemLib.Internal.Configs
