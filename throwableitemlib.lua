@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.4
+    Version 1.5.5
 ]]
 
 ---@class ThrowableItemConfig
@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 6
+local VERSION = 7
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
