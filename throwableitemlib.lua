@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 7
+local VERSION = 8
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
