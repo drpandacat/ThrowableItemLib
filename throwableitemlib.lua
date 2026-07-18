@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.5
+    Version 1.5.6
 ]]
 
 ---@class ThrowableItemConfig
@@ -647,7 +647,7 @@ function ThrowableItemLib.Utility:GetThrowableCardConfig(player, activeSlot, mim
             return
         end
     elseif activeSlot == -1
-    or not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player) then
+    and not ThrowableItemLib.Internal:MimicCondition(player:GetActiveItem(activeSlot), player) then
         return
     end
 
