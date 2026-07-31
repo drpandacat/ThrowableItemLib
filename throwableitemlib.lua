@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.6
+    Version 1.5.7
 ]]
 
 ---@class ThrowableItemConfig
@@ -21,7 +21,7 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 8
+local VERSION = 9
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
@@ -340,7 +340,8 @@ function ThrowableItemLib.Internal:ThrowItem(player, data, card)
     else
         if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
             if not data.Mimic and not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
-                player:SetActiveCharge(player:GetActiveCharge(data.ActiveSlot) - ThrowableItemLib.Utility:GetMaxCharge(player, data.ActiveSlot), data.ActiveSlot)
+                local _, unadjusted = ThrowableItemLib.Utility:GetMaxCharge(player, data.ActiveSlot)
+                player:SetActiveCharge(player:GetActiveCharge(data.ActiveSlot) - unadjusted, data.ActiveSlot)
             end
         else
             player:UseActiveItem(data.HeldConfig.ID, UseFlag.USE_NOANIM)
