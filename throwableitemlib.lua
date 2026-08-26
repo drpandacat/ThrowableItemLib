@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.5.7
+    Version 1.6
 ]]
 
 ---@class ThrowableItemConfig
@@ -8,7 +8,7 @@
 ---@field Type ThrowableItemType Active item or card?
 ---@field LiftFn? fun(player: EntityPlayer, continued: boolean?, slot: ActiveSlot, mimic: CollectibleType?) Called when lifting the item
 ---@field HideFn? fun(player: EntityPlayer, slot: ActiveSlot, mimic: CollectibleType?) Called when hiding the item, but not when throwing
----@field ThrowFn? fun(player: EntityPlayer, vect: Vector, slot: ActiveSlot, mimic: CollectibleType?) Called when throwing the item
+---@field ThrowFn? fun(player: EntityPlayer, vec: Vector, slot: ActiveSlot, mimic: CollectibleType?) Called when throwing the item
 ---@field AnimateFn? fun(player: EntityPlayer, state: ThrowableItemState): boolean? Return true to cancel default animation. Lets you play your own, useful for dynamic sprite changing
 ---@field Flags? ThrowableItemFlag | integer
 ---@field HoldCondition? fun(player: EntityPlayer, config: ThrowableItemConfig): HoldConditionReturnType Called when checking how an item should behave when attempted to be held. If multiple configs exist for the same item and the current check does not allow for the item to be held, checks the next condition down the list based on priority
@@ -21,12 +21,20 @@
 ---@field PrimaryLift? boolean Only lift if the primary pocket slot is filled by an eligible consumable. This active is rendered useless when placed in the pocket slot.
 ---@field SetVarData? boolean
 
-local VERSION = 9
+---@class ChargeConfig
+---@field Identifier string | any
+---@field Priority? number
+---@field Getter fun(player: EntityPlayer): integer
+---@field Setter fun(player: EntityPlayer, amt: integer)
+
+local VERSION = 10
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
 ---@type table<CollectibleType, MimicItemConfig>
 local mimics = {}
+---@type ChargeConfig[]
+local charges = {}
 
 if ThrowableItemLib then
     if ThrowableItemLib.Internal.VERSION > VERSION then
@@ -35,8 +43,12 @@ if ThrowableItemLib then
 
     configs = ThrowableItemLib.Internal.Configs
 
-    if ThrowableItemLib.Internal.MimicItems then
-        mimics = ThrowableItemLib.Internal.MimicItems
+    if ThrowableItemLib.Internal.MimicConfigs then
+        mimics = ThrowableItemLib.Internal.MimicConfigs
+    end
+
+    if ThrowableItemLib.Internal.ChargeConfigs then
+        charges = ThrowableItemLib.Internal.ChargeConfigs
     end
 
     ThrowableItemLib.Internal:ClearCallbacks()
@@ -50,6 +62,7 @@ ThrowableItemLib.Internal.VERSION = VERSION
 ThrowableItemLib.Internal.CallbackEntries = {}
 ThrowableItemLib.Internal.Configs = configs
 ThrowableItemLib.Internal.MimicConfigs = mimics
+ThrowableItemLib.Internal.ChargeConfigs = charges
 
 ---@param tbl table
 function ThrowableItemLib.Internal:PrioritySort(tbl)
@@ -181,23 +194,33 @@ ThrowableItemLib.Callback = {
     ---Parameters:
     ---* player - `EntityPlayer`
     ---* config - `ThrowableItemConfig`
-    ---* vect - `Vector`
+    ---* vec - `Vector`
     ---* slot - `ActiveSlot`
     ---* mimic - `CollectibleType?`
     ---Returns:
     ---
-    ---* Return `true` to prevet throw entirely
+    ---* Return `true` to prevent throw entirely
     ---* Return `false` to cancel throw effects
     PRE_THROW = "THROWABLE_ITEM_LIBRARY_PRE_THROW",
-    ---Called ater throwing a custom throwable item
+    ---Called after throwing a custom throwable item
     ---
     ---Parameters:
     ---* player - `EntityPlayer`
     ---* config - `ThrowableItemConfig`
-    ---* vect - `Vector`
+    ---* vec - `Vector`
     ---* slot - `ActiveSlot`
     ---* mimic - `CollectibleType?`
     POST_THROW = "THROWABLE_ITEM_LIBRARY_POST_THROW",
+    ---Called after a custom discharge for actives with `DISABLE_ITEM_USE` flag
+    ---
+    ---Parameters:
+    ---* player - `EntityPlayer`
+    ---* remainder - `integer`
+    ---
+    ---Returns:
+    ---
+    ---* Return `integer` to pass changes to the next call
+    POST_CUSTOM_DISCHARGE = "THROWABLE_ITEM_LIBRARY_POST_CUSTOM_DISCHARGE",
 }
 
 ThrowableItemLib.Internal.LIFT_FRAME_DELAY = 9
@@ -341,7 +364,24 @@ function ThrowableItemLib.Internal:ThrowItem(player, data, card)
         if ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.DISABLE_ITEM_USE) then
             if not data.Mimic and not ThrowableItemLib.Utility:HasFlags(data.HeldConfig.Flags, ThrowableItemLib.Flag.NO_DISCHARGE) then
                 local _, unadjusted = ThrowableItemLib.Utility:GetMaxCharge(player, data.ActiveSlot)
-                player:SetActiveCharge(player:GetActiveCharge(data.ActiveSlot) - unadjusted, data.ActiveSlot)
+                local targ = player:GetActiveCharge(data.ActiveSlot) - unadjusted
+                local remainder = 0
+                player:SetActiveCharge(math.max(0, targ), data.ActiveSlot)
+                if targ < 0 then
+                    remainder = Isaac.GetItemConfig():GetCollectible(data.ThrownItem.ID).ChargeType == 1 and 1 or math.abs(targ)
+                    for _, v in ipairs(ThrowableItemLib.Internal.ChargeConfigs) do
+                        local amt = v.Getter(player)
+                        if amt > 0 then
+                            local diff = amt - remainder
+                            v.Setter(player, math.max(diff, 0))
+                            if remainder == 0 then break end
+                            remainder = math.abs(diff)
+                        end
+                    end
+                end
+                for _, v in ipairs(Isaac.GetCallbacks(ThrowableItemLib.Callback.POST_CUSTOM_DISCHARGE)) do
+                    remainder = v.Function(v.Mod, player, remainder) or remainder
+                end
             end
         else
             player:UseActiveItem(data.HeldConfig.ID, UseFlag.USE_NOANIM)
@@ -416,24 +456,38 @@ function ThrowableItemLib.Utility:GetMaxCharge(player, slot)
 
     local config = Isaac.GetItemConfig():GetCollectible(item)
     ---@diagnostic disable-next-line: undefined-field
-    local charges = REPENTOGON and player:GetActiveMinUsableCharge(slot) or config.MaxCharges
+    local charge = REPENTOGON and player:GetActiveMaxCharge(slot) or config.MaxCharges
 
     if config.ChargeType == 1 then
-        return charges > 0 and 1 or 0, charges
+        return charge > 0 and 1 or 0, charge
     end
 
-    return charges, charges
+    return charge, charge
+end
+
+---@param player EntityPlayer
+---@param slot ActiveSlot
+function ThrowableItemLib.Utility:GetMinCharge(player, slot)
+    return REPENTOGON and player:GetActiveMinUsableCharge(slot)
+    or ThrowableItemLib.Utility:GetMaxCharge(player, slot)
 end
 
 ---@param player EntityPlayer
 ---@param slot ActiveSlot
 function ThrowableItemLib.Utility:NeedsCharge(player, slot)
-    local max, unadjusted = ThrowableItemLib.Utility:GetMaxCharge(player, slot)
     local charge = player:GetActiveCharge(slot)
-    return (unadjusted ~= max and charge < unadjusted and 0 or charge)
-    + player:GetBloodCharge()
-    + player:GetSoulCharge()
-    < max
+    local timed = Isaac.GetItemConfig():GetCollectible(player:GetActiveItem(slot)).ChargeType == 1
+    for _, v in ipairs(ThrowableItemLib.Internal.ChargeConfigs) do
+        if v.Identifier == 1 or v.Identifier == 2 then -- not pretty because its late. mods will use callback that automatically affects this return
+            local amt = v.Getter(player)
+            if amt > 0 and timed then
+                charge = math.huge
+                break
+            end
+            charge = charge + amt
+        end
+    end
+    return charge < ThrowableItemLib.Utility:GetMinCharge(player, slot)
 end
 
 ---@param player EntityPlayer
@@ -705,6 +759,22 @@ end
 ---@param config MimicItemConfig
 function ThrowableItemLib.Utility:RegisterMimicItem(config)
     ThrowableItemLib.Internal.MimicConfigs[config.ID] = config
+end
+
+---@param config ChargeConfig
+function ThrowableItemLib.Utility:RegisterCharge(config)
+    config.Priority = config.Priority or 1
+    for i = #ThrowableItemLib.Internal.ChargeConfigs, 1, -1 do
+        local v = ThrowableItemLib.Internal.ChargeConfigs[i]
+        if v.Identifier == config.Identifier then
+            table.remove(ThrowableItemLib.Internal.ChargeConfigs, i)
+            break
+        end
+    end
+    ThrowableItemLib.Internal.ChargeConfigs[#ThrowableItemLib.Internal.ChargeConfigs + 1] = config
+    table.sort(ThrowableItemLib.Internal.ChargeConfigs, function (a, b)
+        return a.Priority > b.Priority
+    end)
 end
 
 ---@param player EntityPlayer
@@ -1091,6 +1161,28 @@ ThrowableItemLib.Utility:RegisterMimicItem({
     SetVarData = true,
 })
 
+ThrowableItemLib.Utility:RegisterCharge({
+    Identifier = 1,
+    Priority = math.huge,
+    Getter = function (player)
+        return player:GetSoulCharge()
+    end,
+    Setter = function (player, amt)
+        player:SetSoulCharge(amt)
+    end
+})
+
+ThrowableItemLib.Utility:RegisterCharge({
+    Identifier = 2,
+    Priority = math.huge,
+    Getter = function (player)
+        return player:GetBloodCharge()
+    end,
+    Setter = function (player, amt)
+        player:SetBloodCharge(amt)
+    end
+})
+
 local function RegisterPGO()
     ---@diagnostic disable-next-line: undefined-global
     if FiendFolio then
@@ -1107,9 +1199,7 @@ local function RegisterPGO()
         end
     end
 end
-
 AddCallback(ModCallbacks.MC_POST_GAME_STARTED, RegisterPGO)
-
 if game:GetFrameCount() > 0 then
     RegisterPGO()
 end
