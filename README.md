@@ -8,7 +8,7 @@
 - Allows for dynamically changing the sprite that is lifted, hidden, or thrown
 - Support for multiple configs per item, avoiding mod incompatibilities when adding throw behavior to vanilla items
 - Easy to add compatibility with custom active charges akin to Soul/Blood Charge
-- No dependencies (but has added behavior with REPENTOGON to make things work smoother and fully as expected)
+- No dependencies (but REPENTOGON makes things work smoother and fully as expected)
 
 | Cool Void support!  | Cool pocket item support! |
 | ------------- | ------------- |
