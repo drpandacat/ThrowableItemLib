@@ -12,7 +12,7 @@
 
 | Cool Void support!  | Cool pocket item support! |
 | ------------- | ------------- |
-| ![Void support](https://files.catbox.moe/h4jth2.gif)  | ![Pocket item support](https://files.catbox.moe/73cyng.gif) |
+| ![Void support](https://files.catbox.moe/tgqed4.gif)  | ![Pocket item support](https://files.catbox.moe/49s8uj.gif) |
 ## Example code
 Does not display all features mentioned above!
 ```lua
