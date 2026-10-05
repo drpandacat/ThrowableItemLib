@@ -1,6 +1,6 @@
 --[[
     Throwable Item Library by Kerkel
-    Version 1.6
+    Version 1.6.1
 ]]
 
 ---@class ThrowableItemConfig
@@ -27,7 +27,7 @@
 ---@field Getter fun(player: EntityPlayer): integer
 ---@field Setter fun(player: EntityPlayer, amt: integer)
 
-local VERSION = 10
+local VERSION = 11
 
 ---@type table<string, table<string, ThrowableItemConfig>>
 local configs = {}
@@ -794,7 +794,7 @@ AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, hook, action)
     if hook == InputHook.IS_ACTION_TRIGGERED then
         if action == ButtonAction.ACTION_ITEM then
             local player = entity and entity:ToPlayer()
-            if not player then return end
+            if not player or not Input.IsActionTriggered(action, player.ControllerIndex) then return end
 
             local data = ThrowableItemLib.Internal:GetData(player)
             local type = player:GetPlayerType()
@@ -827,7 +827,7 @@ AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, hook, action)
             end
         elseif action == ButtonAction.ACTION_PILLCARD then
             local player = entity and entity:ToPlayer()
-            if not player then return end
+            if not player or not Input.IsActionTriggered(action, player.ControllerIndex) then return end
 
             local data = ThrowableItemLib.Internal:GetData(player)
             local type = player:GetPlayerType()
@@ -869,13 +869,9 @@ AddCallback(ModCallbacks.MC_INPUT_ACTION, function (_, entity, hook, action)
         end
     end
 
-    -- Redo with future RGON+ callbacks
     if action == ButtonAction.ACTION_DROP then
         local player = entity and entity:ToPlayer()
-
-        if not player then
-            return
-        end
+        if not player then return end
 
         local item = ThrowableItemLib.Utility:GetLiftedItem(player)
 
